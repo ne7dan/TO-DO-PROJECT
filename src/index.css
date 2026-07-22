@@ -1,0 +1,184 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap");
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+  --font-customMono: "Space Mono", ui-monospace, monospace;
+  --color-success: #86efac;
+  --color-success-text: #166534;
+
+  /* Light neo-minimal palette — soft, eye-friendly (not glaring) */
+  --color-canvas: #e4e6ea;
+  --color-canvas-warm: #dbdee3;
+  --color-surface: #f0f1f3;
+  --color-ink: #1a1a1a;
+  --color-ink-soft: #2d3142;
+  --color-muted: #5c6570;
+  --color-line: rgb(26 26 26 / 0.08);
+  --color-accent-blue: #9db8c8;
+  --color-accent-mint: #9fc4b0;
+  --color-accent-amber: #d4b687;
+}
+
+@layer base {
+  html {
+    @apply antialiased;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply m-0 min-h-screen font-sans text-ink;
+    background-color: var(--color-canvas);
+    background-image:
+      radial-gradient(
+        ellipse 90% 55% at 50% -18%,
+        rgb(140 168 184 / 0.14),
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse 55% 40% at 100% 100%,
+        rgb(140 180 156 / 0.1),
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse 45% 35% at 0% 85%,
+        rgb(196 168 120 / 0.08),
+        transparent 45%
+      );
+  }
+
+  html.dark body {
+    @apply bg-zinc-950 text-zinc-50;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255, 255, 255, 0.05), transparent),
+      radial-gradient(ellipse 60% 40% at 0% 100%, rgba(255, 255, 255, 0.03), transparent);
+  }
+
+  * {
+    @apply box-border;
+  }
+}
+
+@layer components {
+  /* Crisp white cards on soft canvas — light only */
+  .ui-card {
+    border-radius: 12px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.05);
+  }
+
+  html.dark .ui-card {
+    background-color: rgb(24 24 27);
+    border-color: rgb(39 39 42);
+    box-shadow: none;
+  }
+
+  /* Nested / inset surfaces — never pure white on light */
+  .ui-inset {
+    border-radius: 12px;
+    background-color: var(--color-canvas-warm);
+    border: 1px solid var(--color-line);
+  }
+
+  html.dark .ui-inset {
+    background-color: rgb(9 9 11 / 0.6);
+    border-color: rgb(63 63 70);
+  }
+
+  .ui-chip {
+    border-radius: 12px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.025);
+  }
+
+  html.dark .ui-chip {
+    background-color: rgb(24 24 27);
+    border-color: rgb(39 39 42);
+    box-shadow: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes live-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  75%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.28s ease-out both;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.35s ease-out both;
+}
+
+.animate-removing {
+  animation: fade-out 0.22s ease-in both;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 1.5s ease-in-out infinite;
+}
+
+.animate-live-ping {
+  animation: live-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
