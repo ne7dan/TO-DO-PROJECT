@@ -1,7 +1,10 @@
-import { useCallback, useMemo } from 'react'
-import { useLocalStorage } from './useLocalStorage'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { supabase } from '../supabaseClient'
+import { habitFromDbRow, habitToDbPayload } from '../lib/habitMapper'
 import { sanitizeTodoText } from '../utils/text'
 import { toDateKey } from '../utils/dates'
+
+const LOCAL_KEY = 'todo-habits'
 
 function createId() {
   return crypto.randomUUID()
@@ -19,7 +22,8 @@ function normalizeHabits(raw) {
           ? habit.completions
           : {}
       const startDate =
-        typeof habit.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(habit.startDate)
+        typeof habit.startDate === 'string' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(habit.startDate)
           ? habit.startDate
           : toDateKey(new Date(habit.createdAt || Date.now()))
 
@@ -40,15 +44,117 @@ function normalizeHabits(raw) {
     .filter(Boolean)
 }
 
-export function useHabits() {
-  const [habits, setHabits] = useLocalStorage('todo-habits', [])
+function readLocalHabits() {
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY)
+    if (!raw) return []
+    return normalizeHabits(JSON.parse(raw))
+  } catch {
+    return []
+  }
+}
+
+function clearLocalHabits() {
+  try {
+    localStorage.removeItem(LOCAL_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Привычки из Supabase (таблица `habits`) + разовый перенос из localStorage.
+ */
+export function useHabits(userId) {
+  const [habits, setHabits] = useState([])
+  const [loading, setLoading] = useState(Boolean(userId))
+  const [error, setError] = useState(null)
+  const migratedRef = useRef(false)
+
+  useEffect(() => {
+    migratedRef.current = false
+    if (!userId) {
+      setHabits([])
+      setLoading(false)
+      setError(null)
+      return undefined
+    }
+
+    let cancelled = false
+
+    async function load() {
+      setLoading(true)
+      setError(null)
+
+      const { data, error: fetchError } = await supabase
+        .from('habits')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (cancelled) return
+
+      if (fetchError) {
+        setError(fetchError.message)
+        setHabits([])
+        setLoading(false)
+        return
+      }
+
+      let list = (data ?? []).map(habitFromDbRow).filter(Boolean)
+
+      // Разовый перенос локальных привычек, если в облаке пусто
+      if (list.length === 0 && !migratedRef.current) {
+        migratedRef.current = true
+        const local = readLocalHabits()
+        if (local.length > 0) {
+          const rows = local.map((h) => habitToDbPayload(h, userId))
+          const { error: upError } = await supabase.from('habits').upsert(rows, {
+            onConflict: 'id',
+          })
+          if (!cancelled && !upError) {
+            list = local
+            clearLocalHabits()
+          } else if (upError) {
+            console.error('[habits] migrate', upError.message)
+          }
+        }
+      } else if (list.length > 0) {
+        clearLocalHabits()
+      }
+
+      if (!cancelled) {
+        setHabits(list)
+        setLoading(false)
+      }
+    }
+
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
 
   const list = useMemo(() => normalizeHabits(habits), [habits])
+
+  const persistHabit = useCallback(
+    async (habit) => {
+      if (!userId) return
+      const { error: upError } = await supabase
+        .from('habits')
+        .upsert(habitToDbPayload(habit, userId), { onConflict: 'id' })
+      if (upError) {
+        console.error('[habits] upsert', upError.message)
+        setError(upError.message)
+      }
+    },
+    [userId],
+  )
 
   const addHabit = useCallback(
     (text) => {
       const safe = sanitizeTodoText(text)
-      if (!safe) return null
+      if (!safe || !userId) return null
       const startDate = toDateKey()
       const habit = {
         id: createId(),
@@ -59,66 +165,87 @@ export function useHabits() {
         skippedDates: {},
       }
       setHabits((prev) => [habit, ...normalizeHabits(prev)])
+      void persistHabit(habit)
       return habit
     },
-    [setHabits],
+    [persistHabit, userId],
   )
 
   const toggleHabit = useCallback(
     (id, dateKey = toDateKey()) => {
-      setHabits((prev) =>
-        normalizeHabits(prev).map((habit) => {
+      setHabits((prev) => {
+        const next = normalizeHabits(prev).map((habit) => {
           if (habit.id !== id) return habit
           if (dateKey < habit.startDate) return habit
-          const next = { ...habit.completions }
-          if (next[dateKey]) delete next[dateKey]
-          else next[dateKey] = true
-          return { ...habit, completions: next }
-        }),
-      )
+          const completions = { ...habit.completions }
+          if (completions[dateKey]) delete completions[dateKey]
+          else completions[dateKey] = true
+          const updated = { ...habit, completions }
+          void persistHabit(updated)
+          return updated
+        })
+        return next
+      })
     },
-    [setHabits],
+    [persistHabit],
   )
 
   const setHabitCompletion = useCallback(
     (id, dateKey, completed) => {
-      setHabits((prev) =>
-        normalizeHabits(prev).map((habit) => {
+      setHabits((prev) => {
+        const next = normalizeHabits(prev).map((habit) => {
           if (habit.id !== id) return habit
           if (dateKey < habit.startDate) return habit
-          const next = { ...habit.completions }
-          if (completed) next[dateKey] = true
-          else delete next[dateKey]
-          return { ...habit, completions: next }
-        }),
-      )
+          const completions = { ...habit.completions }
+          if (completed) completions[dateKey] = true
+          else delete completions[dateKey]
+          const updated = { ...habit, completions }
+          void persistHabit(updated)
+          return updated
+        })
+        return next
+      })
     },
-    [setHabits],
+    [persistHabit],
   )
 
   const skipHabitForDate = useCallback(
     (id, dateKey) => {
-      setHabits((prev) =>
-        normalizeHabits(prev).map((habit) => {
+      setHabits((prev) => {
+        const next = normalizeHabits(prev).map((habit) => {
           if (habit.id !== id) return habit
-          return {
+          const updated = {
             ...habit,
             skippedDates: { ...habit.skippedDates, [dateKey]: true },
           }
-        }),
-      )
+          void persistHabit(updated)
+          return updated
+        })
+        return next
+      })
     },
-    [setHabits],
+    [persistHabit],
   )
 
   const deleteHabit = useCallback(
     (id) => {
       setHabits((prev) => normalizeHabits(prev).filter((h) => h.id !== id))
+      if (!userId) return
+      void supabase
+        .from('habits')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId)
+        .then(({ error: delError }) => {
+          if (delError) {
+            console.error('[habits] delete', delError.message)
+            setError(delError.message)
+          }
+        })
     },
-    [setHabits],
+    [userId],
   )
 
-  /** Одни и те же привычки на каждый день, начиная с даты создания. */
   const getHabitsForDate = useCallback(
     (dateKey = toDateKey()) =>
       list.filter((habit) => dateKey >= habit.startDate),
@@ -135,6 +262,8 @@ export function useHabits() {
 
   return {
     habits: list,
+    loading,
+    error,
     addHabit,
     toggleHabit,
     setHabitCompletion,

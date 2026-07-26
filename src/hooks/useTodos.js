@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocalStorage } from './useLocalStorage'
 import { supabase } from '../supabaseClient'
 import { fromDbRow, toDbPayload, insertTodoRow, clampSortOrder } from '../lib/todoMapper'
 import {
@@ -26,6 +25,9 @@ export const PERIODS = [
 export const TODO_DRAG_TYPE = 'application/x-todo-id'
 
 const SPENT_FLUSH_MS = 4000
+const STREAK_PERSIST_MS = 600
+const LOCAL_COMPLETED_KEY = 'todo-completed-days'
+const LOCAL_FREEZES_KEY = 'todo-streak-freezes'
 
 function createClientId() {
   return crypto.randomUUID()
@@ -34,6 +36,33 @@ function createClientId() {
 function sameDays(a, b) {
   if (a.length !== b.length) return false
   return a.every((day, i) => day === b[i])
+}
+
+function asDateList(value) {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((d) => String(d ?? ''))
+    .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .sort()
+}
+
+function readLocalDateList(key) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return []
+    return asDateList(JSON.parse(raw))
+  } catch {
+    return []
+  }
+}
+
+function clearLocalStreakKeys() {
+  try {
+    localStorage.removeItem(LOCAL_COMPLETED_KEY)
+    localStorage.removeItem(LOCAL_FREEZES_KEY)
+  } catch {
+    // ignore
+  }
 }
 
 function getOrder(todo) {
@@ -93,21 +122,16 @@ function syncCompletedDays(todos, prevCompleted) {
 }
 
 /**
- * Todos из Supabase (таблица `todos`) + локальные streak/freezes.
+ * Todos из Supabase (таблица `todos`) + стрик/заморозки из `user_streak_state`.
  * @param {string | null | undefined} userId — id текущего пользователя Auth
  */
 export function useTodos(userId) {
   const [todos, setTodos] = useState([])
   const [loading, setLoading] = useState(Boolean(userId))
   const [error, setError] = useState(null)
-  const [completedDays, setCompletedDays] = useLocalStorage(
-    'todo-completed-days',
-    [],
-  )
-  const [freezeDates, setFreezeDates] = useLocalStorage(
-    'todo-streak-freezes',
-    [],
-  )
+  const [completedDays, setCompletedDays] = useState([])
+  const [freezeDates, setFreezeDates] = useState([])
+  const [streakReady, setStreakReady] = useState(false)
 
   const todosRef = useRef(todos)
   const spentPendingRef = useRef(new Map())
@@ -193,21 +217,107 @@ export function useTodos(userId) {
     }
   }, [userId])
 
+  /** Загрузка стрика + разовый перенос из localStorage */
   useEffect(() => {
+    if (!userId) {
+      setCompletedDays([])
+      setFreezeDates([])
+      setStreakReady(false)
+      return undefined
+    }
+
+    let cancelled = false
+    setStreakReady(false)
+
+    async function loadStreak() {
+      const { data, error: fetchError } = await supabase
+        .from('user_streak_state')
+        .select('completed_days, freeze_dates')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      if (fetchError) {
+        console.error('[streak] load', fetchError.message)
+      }
+
+      let completed = asDateList(data?.completed_days)
+      let freezes = asDateList(data?.freeze_dates)
+
+      const hasRemote = Boolean(data)
+      if (!hasRemote) {
+        const localCompleted = readLocalDateList(LOCAL_COMPLETED_KEY)
+        const localFreezes = readLocalDateList(LOCAL_FREEZES_KEY)
+        if (localCompleted.length > 0 || localFreezes.length > 0) {
+          completed = localCompleted
+          freezes = localFreezes
+          const { error: upError } = await supabase
+            .from('user_streak_state')
+            .upsert({
+              user_id: userId,
+              completed_days: completed,
+              freeze_dates: freezes,
+              updated_at: new Date().toISOString(),
+            })
+          if (upError) console.error('[streak] migrate', upError.message)
+          else clearLocalStreakKeys()
+        }
+      } else {
+        clearLocalStreakKeys()
+      }
+
+      if (!cancelled) {
+        setCompletedDays(completed)
+        setFreezeDates(freezes)
+        setStreakReady(true)
+      }
+    }
+
+    void loadStreak()
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
+
+  useEffect(() => {
+    if (!streakReady) return
     setCompletedDays((prev) => {
       const synced = syncCompletedDays(todos, prev)
       return sameDays(synced, prev) ? prev : synced
     })
-  }, [todos, setCompletedDays])
+  }, [todos, streakReady])
 
   useEffect(() => {
+    if (!streakReady) return
     setFreezeDates((prev) => {
       const list = Array.isArray(prev) ? prev : []
       const pruned = pruneInvalidFreezes(completedDays, list)
       const next = applyAutoFreeze(completedDays, pruned)
       return sameDays(next, list) ? prev : next
     })
-  }, [completedDays, setFreezeDates])
+  }, [completedDays, streakReady])
+
+  /** Сохранение стрика в облако (debounce) */
+  useEffect(() => {
+    if (!userId || !streakReady) return undefined
+
+    const timer = setTimeout(() => {
+      void supabase
+        .from('user_streak_state')
+        .upsert({
+          user_id: userId,
+          completed_days: asDateList(completedDays),
+          freeze_dates: asDateList(freezeDates),
+          updated_at: new Date().toISOString(),
+        })
+        .then(({ error: upError }) => {
+          if (upError) console.error('[streak] save', upError.message)
+        })
+    }, STREAK_PERSIST_MS)
+
+    return () => clearTimeout(timer)
+  }, [userId, streakReady, completedDays, freezeDates])
 
   /** Оптимистично обновляет локальный список и патчит строку в БД. */
   const patchRemote = useCallback(

@@ -53,7 +53,7 @@ function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
     setHabitCompletion,
     skipHabitForDate,
     deleteHabit,
-  } = useHabits()
+  } = useHabits(user?.id)
 
   const [activePeriod, setActivePeriod] = useState('day')
   const [selectedDate, setSelectedDate] = useState(() => toDateKey())
