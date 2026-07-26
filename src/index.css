@@ -11,10 +11,10 @@
   --color-success: #86efac;
   --color-success-text: #166534;
 
-  /* Light neo-minimal palette — soft, eye-friendly (not glaring) */
-  --color-canvas: #e4e6ea;
-  --color-canvas-warm: #dbdee3;
-  --color-surface: #f0f1f3;
+  /* Light palette — bright on phones (Android OLED makes mid-grays look muddy) */
+  --color-canvas: #f5f6f8;
+  --color-canvas-warm: #eef0f3;
+  --color-surface: #ffffff;
   --color-ink: #1a1a1a;
   --color-ink-soft: #2d3142;
   --color-muted: #5c6570;
@@ -27,11 +27,12 @@
 @layer base {
   html {
     @apply antialiased;
-    color-scheme: light;
+    /* `only` blocks Chrome/Android Auto Dark Mode from inverting light UI */
+    color-scheme: only light;
   }
 
   html.dark {
-    color-scheme: dark;
+    color-scheme: only dark;
   }
 
   body {

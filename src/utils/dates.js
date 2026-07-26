@@ -67,8 +67,29 @@ export function countFreezesInMonth(freezeDates, monthKey) {
 }
 
 /**
- * Авто-заморозка: если вчера не закрыт, но день до него был в серии —
- * тратим 1 заморозку (макс. 2 в месяц), чтобы не оборвать стрик.
+ * Длина серии, заканчивающейся на endKey (выполненные + заморозки).
+ */
+export function streakEndingAt(
+  completedDays,
+  freezeDates = [],
+  endKey,
+) {
+  const set = new Set([...completedDays, ...freezeDates])
+  if (!endKey || !set.has(endKey)) return 0
+
+  let streak = 0
+  let cursor = endKey
+  while (set.has(cursor)) {
+    streak += 1
+    cursor = addDays(cursor, -1)
+  }
+  return streak
+}
+
+/**
+ * Авто-заморозка пропуска.
+ * Работает ТОЛЬКО если до пропуска уже был стрик (≥ 2 дня подряд).
+ * Один одиночный выполненный день заморозку не включает.
  */
 export function applyAutoFreeze(completedDays, freezeDates, todayKey = toDateKey()) {
   const completed = new Set(completedDays)
@@ -80,7 +101,14 @@ export function applyAutoFreeze(completedDays, freezeDates, todayKey = toDateKey
   }
 
   const dayBefore = addDays(yesterday, -1)
-  if (!completed.has(dayBefore) && !freezes.has(dayBefore)) {
+  // День перед пропуском должен быть реально выполнен (не только старая заморозка)
+  if (!completed.has(dayBefore)) {
+    return freezeDates
+  }
+
+  // Заморозка только после первого настоящего стрика (минимум 2 дня подряд)
+  const priorStreak = streakEndingAt(completedDays, freezeDates, dayBefore)
+  if (priorStreak < 2) {
     return freezeDates
   }
 
@@ -90,6 +118,27 @@ export function applyAutoFreeze(completedDays, freezeDates, todayKey = toDateKey
   }
 
   return [...freezeDates, yesterday].sort()
+}
+
+/**
+ * Убирает заморозки, поставленные до первого стрика (одиночный день и т.п.).
+ */
+export function pruneInvalidFreezes(completedDays, freezeDates = []) {
+  const sorted = [...(Array.isArray(freezeDates) ? freezeDates : [])].sort()
+  const kept = []
+
+  for (const freezeDay of sorted) {
+    const dayBefore = addDays(freezeDay, -1)
+    const completed = new Set(completedDays)
+    if (!completed.has(dayBefore)) continue
+
+    const priorStreak = streakEndingAt(completedDays, kept, dayBefore)
+    if (priorStreak < 2) continue
+
+    kept.push(freezeDay)
+  }
+
+  return kept
 }
 
 export function calculateStreak(

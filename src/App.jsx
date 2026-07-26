@@ -6,15 +6,22 @@ import { HabitTracker } from './components/HabitTracker'
 import { Calendar } from './components/Calendar'
 import { Pomodoro } from './components/Pomodoro'
 import { QuickStats } from './components/QuickStats'
+import { AuthScreen } from './components/auth/AuthScreen'
 import { useTheme } from './hooks/useTheme'
+import { useAuth } from './hooks/useAuth'
 import { useTodos } from './hooks/useTodos'
 import { useHabits } from './hooks/useHabits'
+import { useLocale } from './i18n/LocaleContext'
 import { toDateKey } from './utils/dates'
 
-export default function App() {
+/** Основной экран приложения после успешной авторизации. */
+function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
+  const { t } = useLocale()
   const { isDark, toggleTheme } = useTheme()
   const {
     todos: allTodos,
+    loading: todosLoading,
+    error: todosError,
     addTodo,
     updateTodo,
     addSpentTime,
@@ -32,11 +39,12 @@ export default function App() {
     getTodosByPeriod,
     getProgress,
     dayStatuses,
+    dayGoalCounts,
     periodCounts,
     periodHasActive,
     streak,
     freezesLeft,
-  } = useTodos()
+  } = useTodos(user?.id)
 
   const {
     habits,
@@ -71,8 +79,9 @@ export default function App() {
   }, [allTodos])
 
   useEffect(() => {
-    ensureHabitGoals(habits, selectedDate)
-  }, [habits, selectedDate, ensureHabitGoals])
+    if (todosLoading) return
+    void ensureHabitGoals(habits, selectedDate)
+  }, [habits, selectedDate, ensureHabitGoals, todosLoading])
 
   useEffect(() => {
     if (!focusTask) return
@@ -105,8 +114,8 @@ export default function App() {
     getProgress(periodId, periodId === 'day' ? selectedDate : undefined)
 
   const handleDropOnCalendar = (todoId, dateKey, { copy = false } = {}) => {
-    if (copy) copyTodoToDate(todoId, dateKey)
-    else moveTodoToDate(todoId, dateKey)
+    if (copy) void copyTodoToDate(todoId, dateKey)
+    else void moveTodoToDate(todoId, dateKey)
     setSelectedDate(dateKey)
     setActivePeriod('day')
   }
@@ -115,7 +124,7 @@ export default function App() {
     (text) => {
       const habit = addHabit(text)
       if (!habit) return
-      ensureHabitGoals([habit, ...habits], selectedDate)
+      void ensureHabitGoals([habit, ...habits], selectedDate)
     },
     [addHabit, ensureHabitGoals, habits, selectedDate],
   )
@@ -125,7 +134,7 @@ export default function App() {
       const habit = habits.find((h) => h.id === id)
       const nextCompleted = !Boolean(habit?.completions?.[dateKey])
       toggleHabit(id, dateKey)
-      setTodoCompletionByHabit(id, dateKey, nextCompleted)
+      void setTodoCompletionByHabit(id, dateKey, nextCompleted)
     },
     [habits, toggleHabit, setTodoCompletionByHabit],
   )
@@ -133,7 +142,7 @@ export default function App() {
   const handleDeleteHabit = useCallback(
     (id) => {
       deleteHabit(id)
-      removeTodosByHabitId(id)
+      void removeTodosByHabitId(id)
     },
     [deleteHabit, removeTodosByHabitId],
   )
@@ -143,7 +152,7 @@ export default function App() {
       const todo = allTodos.find((t) => t.id === id)
       if (!todo) return
       const nextCompleted = !todo.completed
-      toggleTodo(id)
+      void toggleTodo(id)
       if (todo.habitId && todo.period === 'day') {
         setHabitCompletion(todo.habitId, todo.date, nextCompleted)
       }
@@ -154,7 +163,7 @@ export default function App() {
   const handleDeleteTodo = useCallback(
     (id) => {
       const todo = allTodos.find((t) => t.id === id)
-      deleteTodo(id)
+      void deleteTodo(id)
       if (todo?.habitId && todo.period === 'day') {
         skipHabitForDate(todo.habitId, todo.date)
       }
@@ -165,60 +174,83 @@ export default function App() {
   return (
     <div className="min-h-screen text-ink dark:text-zinc-50">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 sm:py-12 pb-28">
-        <Header isDark={isDark} onToggleTheme={toggleTheme} />
+        <Header
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+          user={user}
+          userEmail={user?.email}
+          onSignOut={onSignOut}
+          onRequestPasswordReset={onRequestPasswordReset}
+        />
 
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 lg:gap-8 lg:items-start">
-          <main className="space-y-4 min-w-0">
-            <PeriodTabs
-              active={activePeriod}
-              onChange={setActivePeriod}
-              getProgress={handleProgress}
-              periodCounts={periodCounts}
-              periodHasActive={periodHasActive}
-            />
+        {todosError && (
+          <p
+            className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+            role="alert"
+          >
+            {todosError}
+          </p>
+        )}
 
-            <TodoList
-              period={activePeriod}
-              todos={todos}
-              selectedDate={selectedDate}
-              onAdd={addTodo}
-              onUpdate={updateTodo}
-              onToggle={handleToggleTodo}
-              onDelete={handleDeleteTodo}
-              onAddSubtask={addSubtask}
-              onToggleSubtask={toggleSubtask}
-              onDeleteSubtask={deleteSubtask}
-              onFocus={setFocusTask}
-              onReorder={reorderTodos}
-            />
+        {todosLoading ? (
+          <p className="mt-10 text-sm text-muted dark:text-zinc-400">
+            {t('auth.loadingTodos')}
+          </p>
+        ) : (
+          <div className="mt-8 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 lg:gap-8 lg:items-start">
+            <main className="space-y-4 min-w-0">
+              <PeriodTabs
+                active={activePeriod}
+                onChange={setActivePeriod}
+                getProgress={handleProgress}
+                periodCounts={periodCounts}
+                periodHasActive={periodHasActive}
+              />
 
-            <QuickStats
-              getTodosByPeriod={getTodosByPeriod}
-              periodCounts={periodCounts}
-              streak={streak}
-              selectedDate={selectedDate}
-            />
+              <TodoList
+                period={activePeriod}
+                todos={todos}
+                selectedDate={selectedDate}
+                onAdd={addTodo}
+                onUpdate={updateTodo}
+                onToggle={handleToggleTodo}
+                onDelete={handleDeleteTodo}
+                onAddSubtask={addSubtask}
+                onToggleSubtask={toggleSubtask}
+                onDeleteSubtask={deleteSubtask}
+                onFocus={setFocusTask}
+                onReorder={reorderTodos}
+              />
 
-            <HabitTracker
-              habits={habits}
-              selectedDate={selectedDate}
-              onAdd={handleAddHabit}
-              onToggle={handleToggleHabit}
-              onDelete={handleDeleteHabit}
-            />
-          </main>
+              <QuickStats
+                getTodosByPeriod={getTodosByPeriod}
+                periodCounts={periodCounts}
+                streak={streak}
+                selectedDate={selectedDate}
+              />
 
-          <div className="lg:sticky lg:top-8">
-            <Calendar
-              dayStatuses={dayStatuses}
-              streak={streak}
-              freezesLeft={freezesLeft}
-              selectedDate={selectedDate}
-              onSelectDate={handleSelectDate}
-              onDropTodo={handleDropOnCalendar}
-            />
+              <HabitTracker
+                habits={habits}
+                selectedDate={selectedDate}
+                onAdd={handleAddHabit}
+                onToggle={handleToggleHabit}
+                onDelete={handleDeleteHabit}
+              />
+            </main>
+
+            <div className="lg:sticky lg:top-8">
+              <Calendar
+                dayStatuses={dayStatuses}
+                dayGoalCounts={dayGoalCounts}
+                streak={streak}
+                freezesLeft={freezesLeft}
+                selectedDate={selectedDate}
+                onSelectDate={handleSelectDate}
+                onDropTodo={handleDropOnCalendar}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <Pomodoro
@@ -229,5 +261,68 @@ export default function App() {
         onTrackFocusTime={addSpentTime}
       />
     </div>
+  )
+}
+
+/**
+ * Корень: пока нет session — форма логина/регистрации,
+ * после входа — список Todo из Supabase.
+ */
+export default function App() {
+  const { t } = useLocale()
+  const {
+    session,
+    user,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    requestPasswordReset,
+    updatePassword,
+    recoveryMode,
+    clearRecoveryMode,
+  } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-muted dark:text-zinc-400">
+        {t('auth.loading')}
+      </div>
+    )
+  }
+
+  // Ссылка из письма сброса пароля — форма нового пароля
+  if (recoveryMode) {
+    return (
+      <AuthScreen
+        signIn={signIn}
+        signUp={signUp}
+        requestPasswordReset={requestPasswordReset}
+        updatePassword={updatePassword}
+        recoveryMode
+        clearRecoveryMode={clearRecoveryMode}
+      />
+    )
+  }
+
+  if (!session) {
+    return (
+      <AuthScreen
+        signIn={signIn}
+        signUp={signUp}
+        requestPasswordReset={requestPasswordReset}
+        updatePassword={updatePassword}
+        recoveryMode={false}
+        clearRecoveryMode={clearRecoveryMode}
+      />
+    )
+  }
+
+  return (
+    <TodoApp
+      user={user}
+      onSignOut={signOut}
+      onRequestPasswordReset={requestPasswordReset}
+    />
   )
 }

@@ -624,7 +624,11 @@ export function Pomodoro({
   const [phase, setPhase] = useState('work')
   const [seconds, setSeconds] = useState(DEFAULT_WORK_MIN * 60)
   const [running, setRunning] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  // На мобильных панель свёрнута; на ПК — открыта (без реакции на resize)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(max-width: 767px)').matches
+  })
   const [zenMode, setZenMode] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [draftWork, setDraftWork] = useState(String(DEFAULT_WORK_MIN))
@@ -917,7 +921,7 @@ export function Pomodoro({
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 w-[min(100%-2.5rem,20.5rem)] overflow-hidden rounded-xl border border-black/[0.06] dark:border-zinc-700/90 bg-surface dark:bg-zinc-900/95 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.65)] animate-slide-up">
+    <div className="fixed bottom-5 right-5 z-50 w-[min(100%-2.5rem,20.5rem)] max-sm:origin-bottom-right max-sm:scale-90 overflow-hidden rounded-xl border border-black/[0.06] dark:border-zinc-700/90 bg-surface dark:bg-zinc-900/95 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.65)] animate-slide-up">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#D5E2EA]/70 to-transparent dark:from-zinc-800/40" />
 
       <div className="relative p-4">
@@ -967,14 +971,14 @@ export function Pomodoro({
               aria-label={t('pomodoro.collapse')}
               className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
             >
-              <Minimize2 size={14} />
+              <X size={14} />
             </button>
           </div>
         </div>
 
         <ModeToggle mode={mode} onChange={switchMode} />
 
-        <div className="mt-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/50 px-2.5 py-2">
+        <div className="mt-3 hidden sm:block rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/50 px-2.5 py-2">
           <FocusGoalPicker
             focusTask={focusTask}
             focusOptions={optionsWithCurrent}

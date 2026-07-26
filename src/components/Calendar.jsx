@@ -24,6 +24,7 @@ const STATUS_STYLES = {
 
 export function Calendar({
   dayStatuses,
+  dayGoalCounts = {},
   streak,
   freezesLeft = 0,
   selectedDate,
@@ -90,19 +91,21 @@ export function Calendar({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <div
-            className="flex items-center gap-1 rounded-xl border border-[#B5C9D4] bg-[#D5E2EA] dark:border-sky-700/50 dark:bg-sky-950/30 px-2 py-1.5"
-            title={t('calendar.freezeTitle', { n: freezesLeft })}
-          >
-            <Snowflake
-              size={13}
-              strokeWidth={1.75}
-              className="text-[#5A8FA8] dark:text-sky-400"
-            />
-            <p className="text-xs font-semibold tabular-nums text-[#3A5F73] dark:text-sky-200 leading-none">
-              {freezesLeft}
-            </p>
-          </div>
+          {streak >= 1 && (
+            <div
+              className="flex items-center gap-1 rounded-xl border border-[#B5C9D4] bg-[#D5E2EA] dark:border-sky-700/50 dark:bg-sky-950/30 px-2 py-1.5"
+              title={t('calendar.freezeTitle', { n: freezesLeft })}
+            >
+              <Snowflake
+                size={13}
+                strokeWidth={1.75}
+                className="text-[#5A8FA8] dark:text-sky-400"
+              />
+              <p className="text-xs font-semibold tabular-nums text-[#3A5F73] dark:text-sky-200 leading-none">
+                {freezesLeft}
+              </p>
+            </div>
+          )}
 
           <div
             className={[
@@ -153,6 +156,7 @@ export function Calendar({
 
           const key = toDateKey(date)
           const status = dayStatuses[key]
+          const goalCount = dayGoalCounts[key] || 0
           const isToday = key === todayKey
           const isSelected = key === selectedDate
           const isDrop = dropTarget === key
@@ -180,11 +184,13 @@ export function Calendar({
               }}
               title={
                 status
-                  ? `${key}: ${t(`calendar.status.${status}`)}`
+                  ? `${key}: ${t(`calendar.status.${status}`)}${
+                      goalCount > 0 ? ` · ${goalCount}` : ''
+                    }`
                   : t('calendar.dropHint', { date: key })
               }
               className={[
-                'aspect-square rounded-xl flex items-center justify-center font-customMono text-xs tabular-nums transition-all duration-200',
+                'aspect-square rounded-xl flex flex-col items-center justify-center gap-0 font-customMono tabular-nums transition-all duration-200 leading-none',
                 status
                   ? STATUS_STYLES[status]
                   : 'bg-canvas-warm text-muted hover:bg-[#D5E2EA] dark:bg-zinc-800/80 dark:text-zinc-400 dark:hover:bg-zinc-700',
@@ -199,7 +205,16 @@ export function Calendar({
                   : '',
               ].join(' ')}
             >
-              {date.getDate()}
+              <span
+                className={[
+                  'text-[9px] font-semibold min-h-[0.7rem]',
+                  goalCount > 0 ? 'opacity-90' : 'opacity-0',
+                ].join(' ')}
+                aria-hidden={goalCount === 0}
+              >
+                {goalCount > 0 ? goalCount : '\u00A0'}
+              </span>
+              <span className="text-xs">{date.getDate()}</span>
             </button>
           )
         })}

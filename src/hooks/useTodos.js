@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalStorage } from './useLocalStorage'
+import { supabase } from '../supabaseClient'
+import { fromDbRow, toDbPayload, insertTodoRow, clampSortOrder } from '../lib/todoMapper'
 import {
   applyAutoFreeze,
   buildDayStatuses,
   calculateStreak,
   countFreezesInMonth,
   MAX_FREEZES_PER_MONTH,
+  pruneInvalidFreezes,
   toDateKey,
   toMonthKey,
 } from '../utils/dates'
@@ -22,8 +25,10 @@ export const PERIODS = [
 
 export const TODO_DRAG_TYPE = 'application/x-todo-id'
 
-function createId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+const SPENT_FLUSH_MS = 4000
+
+function createClientId() {
+  return crypto.randomUUID()
 }
 
 function sameDays(a, b) {
@@ -32,18 +37,18 @@ function sameDays(a, b) {
 }
 
 function getOrder(todo) {
-  return typeof todo.order === 'number' ? todo.order : todo.createdAt ?? 0
+  return clampSortOrder(
+    typeof todo.order === 'number' ? todo.order : 0,
+  )
 }
 
 function normalizeTodos(raw) {
   if (!Array.isArray(raw)) return []
-
   return raw
     .map((todo) => {
       if (!todo || typeof todo !== 'object') return null
       const text = sanitizeTodoText(String(todo.text ?? ''))
       if (!text) return null
-
       const subtasks = Array.isArray(todo.subtasks)
         ? todo.subtasks
             .map((sub) => {
@@ -54,7 +59,6 @@ function normalizeTodos(raw) {
             })
             .filter(Boolean)
         : []
-
       return {
         ...todo,
         text,
@@ -80,47 +84,114 @@ function syncCompletedDays(todos, prevCompleted) {
   }
 
   const next = new Set(prevCompleted)
-
   for (const [date, list] of byDate) {
     const allDone = list.length > 0 && list.every((t) => t.completed)
     if (allDone) next.add(date)
     else next.delete(date)
   }
-
   return Array.from(next).sort()
 }
 
-export function useTodos() {
-  const [todos, setTodos] = useLocalStorage('todo-items', [])
+/**
+ * Todos из Supabase (таблица `todos`) + локальные streak/freezes.
+ * @param {string | null | undefined} userId — id текущего пользователя Auth
+ */
+export function useTodos(userId) {
+  const [todos, setTodos] = useState([])
+  const [loading, setLoading] = useState(Boolean(userId))
+  const [error, setError] = useState(null)
   const [completedDays, setCompletedDays] = useLocalStorage(
     'todo-completed-days',
     [],
   )
-  const [freezeDates, setFreezeDates] = useLocalStorage('todo-streak-freezes', [])
+  const [freezeDates, setFreezeDates] = useLocalStorage(
+    'todo-streak-freezes',
+    [],
+  )
+
+  const todosRef = useRef(todos)
+  const spentPendingRef = useRef(new Map())
+  const spentTimerRef = useRef(null)
+
+  todosRef.current = todos
+
+  /** Пишет накопленный spent_seconds в БД пачкой (не каждую секунду). */
+  const flushSpentSeconds = useCallback(async () => {
+    const pending = spentPendingRef.current
+    if (!userId || pending.size === 0) return
+
+    const entries = Array.from(pending.entries())
+    pending.clear()
+
+    await Promise.all(
+      entries.map(async ([id, seconds]) => {
+        const current = todosRef.current.find((t) => t.id === id)
+        const value = current?.spentSeconds ?? seconds
+        const { error: updateError } = await supabase
+          .from('todos')
+          .update({ spent_seconds: value })
+          .eq('id', id)
+          .eq('user_id', userId)
+        if (updateError) {
+          console.error('[todos] spent_seconds', updateError.message)
+        }
+      }),
+    )
+  }, [userId])
+
+  const scheduleSpentFlush = useCallback(() => {
+    if (spentTimerRef.current) return
+    spentTimerRef.current = setTimeout(() => {
+      spentTimerRef.current = null
+      void flushSpentSeconds()
+    }, SPENT_FLUSH_MS)
+  }, [flushSpentSeconds])
 
   useEffect(() => {
-    setTodos((prev) => {
-      const normalized = normalizeTodos(prev)
-      const needsFix =
-        normalized.length !== prev.length ||
-        normalized.some(
-          (todo, i) =>
-            todo.text !== prev[i]?.text ||
-            todo.priority !== normalizePriority(prev[i]?.priority) ||
-            todo.order !== getOrder(prev[i] ?? {}) ||
-            todo.estimatedMinutes !==
-              normalizeEstimateMinutes(prev[i]?.estimatedMinutes) ||
-            todo.spentSeconds !==
-              Math.max(0, Math.floor(Number(prev[i]?.spentSeconds) || 0)) ||
-            todo.subtasks.length !== (prev[i]?.subtasks?.length ?? 0) ||
-            todo.subtasks.some(
-              (s, j) => s.text !== prev[i]?.subtasks?.[j]?.text,
-            ),
+    return () => {
+      if (spentTimerRef.current) clearTimeout(spentTimerRef.current)
+      void flushSpentSeconds()
+    }
+  }, [flushSpentSeconds])
+
+  /** Загрузка всех задач пользователя: .select() */
+  useEffect(() => {
+    if (!userId) {
+      setTodos([])
+      setLoading(false)
+      setError(null)
+      return
+    }
+
+    let cancelled = false
+
+    async function fetchTodos() {
+      setLoading(true)
+      setError(null)
+      const { data, error: fetchError } = await supabase
+        .from('todos')
+        .select('*')
+        .eq('user_id', userId)
+        .order('sort_order', { ascending: true })
+
+      if (cancelled) return
+
+      if (fetchError) {
+        setError(fetchError.message)
+        setTodos([])
+      } else {
+        setTodos(
+          (data ?? []).map(fromDbRow).filter(Boolean),
         )
-      return needsFix ? normalized : prev
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+      }
+      setLoading(false)
+    }
+
+    void fetchTodos()
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
 
   useEffect(() => {
     setCompletedDays((prev) => {
@@ -132,51 +203,104 @@ export function useTodos() {
   useEffect(() => {
     setFreezeDates((prev) => {
       const list = Array.isArray(prev) ? prev : []
-      const next = applyAutoFreeze(completedDays, list)
+      const pruned = pruneInvalidFreezes(completedDays, list)
+      const next = applyAutoFreeze(completedDays, pruned)
       return sameDays(next, list) ? prev : next
     })
   }, [completedDays, setFreezeDates])
 
-  const addTodo = useCallback(
-    (period, text, dateKey = toDateKey(), meta = {}) => {
-      const safeText = sanitizeTodoText(text)
-      if (!safeText) return
-
-      setTodos((prev) => {
-        const normalized = normalizeTodos(prev)
-        const minOrder = normalized.reduce(
-          (min, t) => Math.min(min, getOrder(t)),
-          Date.now(),
-        )
-        return [
-          {
-            id: createId(),
-            text: safeText,
-            completed: false,
-            period,
-            date: period === 'day' ? dateKey : toDateKey(),
-            subtasks: [],
-            priority: normalizePriority(meta.priority),
-            estimatedMinutes: normalizeEstimateMinutes(meta.estimatedMinutes),
-            spentSeconds: 0,
-            habitId: typeof meta.habitId === 'string' ? meta.habitId : null,
-            order: minOrder - 1,
-            createdAt: Date.now(),
-          },
-          ...normalized,
-        ]
-      })
+  /** Оптимистично обновляет локальный список и патчит строку в БД. */
+  const patchRemote = useCallback(
+    async (id, uiPatch) => {
+      if (!userId) return
+      let payload = toDbPayload(uiPatch)
+      // title может отсутствовать в схеме — пробуем, при ошибке колонки убираем
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const { error: updateError } = await supabase
+          .from('todos')
+          .update(payload)
+          .eq('id', id)
+          .eq('user_id', userId)
+        if (!updateError) return
+        const msg = updateError.message || ''
+        if (/Could not find the 'title' column/i.test(msg) && payload.title !== undefined) {
+          const { title: _t, ...rest } = payload
+          payload = rest
+          continue
+        }
+        if (/habit_id|uuid/i.test(msg) && payload.habit_id != null) {
+          payload = { ...payload, habit_id: null }
+          continue
+        }
+        if (/out of range for type integer/i.test(msg)) {
+          payload = { ...payload, sort_order: clampSortOrder(attempt) }
+          continue
+        }
+        setError(updateError.message)
+        console.error('[todos] update', updateError.message)
+        return
+      }
     },
-    [setTodos],
+    [userId],
+  )
+
+  const addTodo = useCallback(
+    async (period, text, dateKey = toDateKey(), meta = {}) => {
+      const safeText = sanitizeTodoText(text)
+      if (!safeText || !userId) return
+
+      const list = normalizeTodos(todosRef.current)
+      const minOrder = list.reduce(
+        (min, t) => Math.min(min, getOrder(t)),
+        0,
+      )
+
+      const draft = {
+        id: createClientId(),
+        text: safeText,
+        completed: false,
+        period,
+        date: period === 'day' ? dateKey : toDateKey(),
+        subtasks: [],
+        priority: normalizePriority(meta.priority),
+        estimatedMinutes: normalizeEstimateMinutes(meta.estimatedMinutes),
+        spentSeconds: 0,
+        habitId: typeof meta.habitId === 'string' ? meta.habitId : null,
+        order: minOrder - 1,
+        createdAt: Date.now(),
+      }
+
+      setTodos((prev) => [draft, ...normalizeTodos(prev)])
+
+      const { data, error: insertError } = await insertTodoRow(
+        supabase,
+        draft,
+        userId,
+      )
+
+      if (insertError) {
+        setError(insertError.message)
+        setTodos((prev) => prev.filter((t) => t.id !== draft.id))
+        return
+      }
+
+      const saved = fromDbRow(data)
+      if (saved) {
+        setTodos((prev) =>
+          prev.map((t) => (t.id === draft.id ? saved : t)),
+        )
+      }
+    },
+    [userId],
   )
 
   const updateTodo = useCallback(
-    (id, patch) => {
+    async (id, patch) => {
+      let nextTodo = null
       setTodos((prev) =>
         normalizeTodos(prev).map((todo) => {
           if (todo.id !== id) return todo
           const next = { ...todo }
-
           if (patch.text !== undefined) {
             const safeText = sanitizeTodoText(patch.text)
             if (!safeText) return todo
@@ -193,18 +317,20 @@ export function useTodos() {
           if (patch.date !== undefined && todo.period === 'day') {
             next.date = patch.date
           }
-
+          nextTodo = next
           return next
         }),
       )
+      if (nextTodo) await patchRemote(id, nextTodo)
     },
-    [setTodos],
+    [patchRemote],
   )
 
   const addSpentTime = useCallback(
     (id, seconds = 1) => {
       const delta = Math.max(0, Math.floor(seconds))
       if (!delta) return
+
       setTodos((prev) =>
         normalizeTodos(prev).map((todo) =>
           todo.id === id
@@ -212,14 +338,19 @@ export function useTodos() {
             : todo,
         ),
       )
+
+      const pending = spentPendingRef.current
+      pending.set(id, (pending.get(id) || 0) + delta)
+      scheduleSpentFlush()
     },
-    [setTodos],
+    [scheduleSpentFlush],
   )
 
   const reorderTodos = useCallback(
-    (draggedId, targetId) => {
-      if (!draggedId || !targetId || draggedId === targetId) return
+    async (draggedId, targetId) => {
+      if (!draggedId || !targetId || draggedId === targetId || !userId) return
 
+      let orderUpdates = []
       setTodos((prev) => {
         const list = normalizeTodos(prev)
         const dragged = list.find((t) => t.id === draggedId)
@@ -249,18 +380,30 @@ export function useTodos() {
 
         const orderMap = new Map()
         nextGroup.forEach((t, i) => orderMap.set(t.id, i))
+        orderUpdates = Array.from(orderMap.entries())
 
         return list.map((t) =>
           orderMap.has(t.id) ? { ...t, order: orderMap.get(t.id) } : t,
         )
       })
+
+      await Promise.all(
+        orderUpdates.map(([id, sort_order]) =>
+          supabase
+            .from('todos')
+            .update({ sort_order })
+            .eq('id', id)
+            .eq('user_id', userId),
+        ),
+      )
     },
-    [setTodos],
+    [userId],
   )
 
   const moveTodoToDate = useCallback(
-    (id, dateKey) => {
-      if (!dateKey) return
+    async (id, dateKey) => {
+      if (!dateKey || !userId) return
+      let nextTodo = null
       setTodos((prev) => {
         const list = normalizeTodos(prev)
         const todo = list.find((t) => t.id === id)
@@ -271,210 +414,312 @@ export function useTodos() {
         )
         const minOrder = peers.reduce(
           (min, t) => Math.min(min, getOrder(t)),
-          Date.now(),
+          0,
         )
 
-        return list.map((t) =>
-          t.id === id
-            ? {
-                ...t,
-                date: dateKey,
-                order: minOrder - 1,
-                habitId: null,
-              }
-            : t,
-        )
+        return list.map((t) => {
+          if (t.id !== id) return t
+          nextTodo = {
+            ...t,
+            date: dateKey,
+            order: minOrder - 1,
+            habitId: null,
+          }
+          return nextTodo
+        })
       })
+      if (nextTodo) await patchRemote(id, nextTodo)
     },
-    [setTodos],
+    [userId, patchRemote],
   )
 
   const copyTodoToDate = useCallback(
-    (id, dateKey) => {
-      if (!dateKey) return
-      setTodos((prev) => {
-        const list = normalizeTodos(prev)
-        const todo = list.find((t) => t.id === id)
-        if (!todo || todo.period !== 'day') return prev
-        if (todo.date === dateKey) return prev
+    async (id, dateKey) => {
+      if (!dateKey || !userId) return
+      const list = normalizeTodos(todosRef.current)
+      const todo = list.find((t) => t.id === id)
+      if (!todo || todo.period !== 'day' || todo.date === dateKey) return
 
-        const peers = list.filter(
-          (t) => t.period === 'day' && t.date === dateKey,
-        )
-        const minOrder = peers.reduce(
-          (min, t) => Math.min(min, getOrder(t)),
-          Date.now(),
-        )
+      const peers = list.filter(
+        (t) => t.period === 'day' && t.date === dateKey,
+      )
+      const minOrder = peers.reduce(
+        (min, t) => Math.min(min, getOrder(t)),
+        0,
+      )
 
-        const clone = {
-          ...todo,
-          id: createId(),
-          date: dateKey,
+      const draft = {
+        ...todo,
+        id: createClientId(),
+        date: dateKey,
+        completed: false,
+        spentSeconds: 0,
+        habitId: null,
+        order: minOrder - 1,
+        createdAt: Date.now(),
+        subtasks: todo.subtasks.map((sub) => ({
+          ...sub,
+          id: createClientId(),
           completed: false,
-          spentSeconds: 0,
-          habitId: null,
-          order: minOrder - 1,
-          createdAt: Date.now(),
-          subtasks: todo.subtasks.map((sub) => ({
-            ...sub,
-            id: createId(),
-            completed: false,
-          })),
-        }
+        })),
+      }
 
-        return [clone, ...list]
-      })
+      setTodos((prev) => [draft, ...normalizeTodos(prev)])
+
+      const { data, error: insertError } = await insertTodoRow(
+        supabase,
+        draft,
+        userId,
+      )
+
+      if (insertError) {
+        setError(insertError.message)
+        setTodos((prev) => prev.filter((t) => t.id !== draft.id))
+        return
+      }
+
+      const saved = fromDbRow(data)
+      if (saved) {
+        setTodos((prev) =>
+          prev.map((t) => (t.id === draft.id ? saved : t)),
+        )
+      }
     },
-    [setTodos],
+    [userId],
   )
 
-  /** Материализует цели дня из активных привычек. */
   const ensureHabitGoals = useCallback(
-    (habits, dateKey = toDateKey()) => {
-      if (!dateKey || !Array.isArray(habits) || habits.length === 0) return
+    async (habits, dateKey = toDateKey()) => {
+      if (!userId || !dateKey || !Array.isArray(habits) || habits.length === 0) {
+        return
+      }
+
+      const list = normalizeTodos(todosRef.current)
+      const existing = new Set(
+        list
+          .filter(
+            (t) => t.period === 'day' && t.date === dateKey && t.habitId,
+          )
+          .map((t) => t.habitId),
+      )
+
+      const additions = []
+      let minOrder = list.reduce(
+        (min, t) => Math.min(min, getOrder(t)),
+        0,
+      )
+
+      for (const habit of habits) {
+        if (!habit?.id || dateKey < habit.startDate) continue
+        if (habit.skippedDates?.[dateKey]) continue
+        if (existing.has(habit.id)) continue
+
+        minOrder -= 1
+        additions.push({
+          id: createClientId(),
+          text: habit.text,
+          completed: Boolean(habit.completions?.[dateKey]),
+          period: 'day',
+          date: dateKey,
+          subtasks: [],
+          priority: 'none',
+          estimatedMinutes: 0,
+          spentSeconds: 0,
+          habitId: habit.id,
+          order: minOrder,
+          createdAt: Date.now(),
+        })
+      }
+
+      if (additions.length === 0) return
+
+      setTodos((prev) => [...additions, ...normalizeTodos(prev)])
+
+      const inserted = []
+
+      for (const item of additions) {
+        const { data, error: insertError } = await insertTodoRow(
+          supabase,
+          item,
+          userId,
+        )
+        if (insertError) {
+          setError(insertError.message)
+          continue
+        }
+        const saved = fromDbRow(data)
+        if (saved) inserted.push(saved)
+      }
 
       setTodos((prev) => {
-        const list = normalizeTodos(prev)
-        const existing = new Set(
-          list
-            .filter(
-              (t) =>
-                t.period === 'day' && t.date === dateKey && t.habitId,
-            )
-            .map((t) => t.habitId),
-        )
-
-        const additions = []
-        let minOrder = list.reduce(
-          (min, t) => Math.min(min, getOrder(t)),
-          Date.now(),
-        )
-
-        for (const habit of habits) {
-          if (!habit?.id || dateKey < habit.startDate) continue
-          if (habit.skippedDates?.[dateKey]) continue
-          if (existing.has(habit.id)) continue
-
-          minOrder -= 1
-          additions.push({
-            id: createId(),
-            text: habit.text,
-            completed: Boolean(habit.completions?.[dateKey]),
-            period: 'day',
-            date: dateKey,
-            subtasks: [],
-            priority: 'none',
-            estimatedMinutes: 0,
-            spentSeconds: 0,
-            habitId: habit.id,
-            order: minOrder,
-            createdAt: Date.now(),
-          })
-        }
-
-        if (additions.length === 0) return prev
-        return [...additions, ...list]
+        const tempIds = new Set(additions.map((a) => a.id))
+        const withoutTemp = prev.filter((t) => !tempIds.has(t.id))
+        return [...inserted, ...withoutTemp]
       })
     },
-    [setTodos],
+    [userId],
   )
 
   const removeTodosByHabitId = useCallback(
-    (habitId) => {
-      if (!habitId) return
+    async (habitId) => {
+      if (!habitId || !userId) return
+      const toRemove = normalizeTodos(todosRef.current).filter(
+        (t) => t.habitId === habitId,
+      )
       setTodos((prev) =>
         normalizeTodos(prev).filter((t) => t.habitId !== habitId),
       )
+      if (toRemove.length === 0) return
+
+      const { error: deleteError } = await supabase
+        .from('todos')
+        .delete()
+        .eq('user_id', userId)
+        .eq('habit_id', habitId)
+
+      if (deleteError) {
+        setError(deleteError.message)
+      }
     },
-    [setTodos],
+    [userId],
   )
 
   const setTodoCompletionByHabit = useCallback(
-    (habitId, dateKey, completed) => {
-      if (!habitId || !dateKey) return
+    async (habitId, dateKey, completed) => {
+      if (!habitId || !dateKey || !userId) return
+      const targets = []
       setTodos((prev) =>
-        normalizeTodos(prev).map((t) =>
-          t.habitId === habitId && t.period === 'day' && t.date === dateKey
-            ? { ...t, completed: Boolean(completed) }
-            : t,
+        normalizeTodos(prev).map((t) => {
+          if (
+            t.habitId === habitId &&
+            t.period === 'day' &&
+            t.date === dateKey
+          ) {
+            const next = { ...t, completed: Boolean(completed) }
+            targets.push(next)
+            return next
+          }
+          return t
+        }),
+      )
+
+      await Promise.all(
+        targets.map((todo) =>
+          supabase
+            .from('todos')
+            .update({ completed: todo.completed })
+            .eq('id', todo.id)
+            .eq('user_id', userId),
         ),
       )
     },
-    [setTodos],
+    [userId],
   )
 
   const toggleTodo = useCallback(
-    (id) => {
+    async (id) => {
+      let nextTodo = null
       setTodos((prev) =>
-        normalizeTodos(prev).map((t) =>
-          t.id === id ? { ...t, completed: !t.completed } : t,
-        ),
+        normalizeTodos(prev).map((t) => {
+          if (t.id !== id) return t
+          nextTodo = { ...t, completed: !t.completed }
+          return nextTodo
+        }),
       )
+      if (!nextTodo || !userId) return
+      const { error: updateError } = await supabase
+        .from('todos')
+        .update({ completed: nextTodo.completed })
+        .eq('id', id)
+        .eq('user_id', userId)
+      if (updateError) setError(updateError.message)
     },
-    [setTodos],
+    [userId],
   )
 
   const deleteTodo = useCallback(
-    (id) => {
+    async (id) => {
+      if (!userId) return
+      const snapshot = normalizeTodos(todosRef.current)
       setTodos((prev) => normalizeTodos(prev).filter((t) => t.id !== id))
+
+      const { error: deleteError } = await supabase
+        .from('todos')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId)
+
+      if (deleteError) {
+        setError(deleteError.message)
+        setTodos(snapshot)
+      }
     },
-    [setTodos],
+    [userId],
   )
 
   const addSubtask = useCallback(
-    (todoId, text) => {
+    async (todoId, text) => {
       const safeText = sanitizeTodoText(text)
       if (!safeText) return
-
+      let nextTodo = null
       setTodos((prev) =>
-        normalizeTodos(prev).map((t) =>
-          t.id === todoId
-            ? {
-                ...t,
-                subtasks: [
-                  ...t.subtasks,
-                  { id: createId(), text: safeText, completed: false },
-                ],
-              }
-            : t,
-        ),
+        normalizeTodos(prev).map((t) => {
+          if (t.id !== todoId) return t
+          nextTodo = {
+            ...t,
+            subtasks: [
+              ...t.subtasks,
+              { id: createClientId(), text: safeText, completed: false },
+            ],
+          }
+          return nextTodo
+        }),
       )
+      if (nextTodo) await patchRemote(todoId, nextTodo)
     },
-    [setTodos],
+    [patchRemote],
   )
 
   const toggleSubtask = useCallback(
-    (todoId, subtaskId) => {
+    async (todoId, subtaskId) => {
+      let nextTodo = null
       setTodos((prev) =>
         normalizeTodos(prev).map((t) => {
           if (t.id !== todoId) return t
           const subtasks = t.subtasks.map((s) =>
             s.id === subtaskId ? { ...s, completed: !s.completed } : s,
           )
-          return {
+          nextTodo = {
             ...t,
             subtasks,
             ...(subtasks.length > 0
               ? { completed: subtasks.every((s) => s.completed) }
               : {}),
           }
+          return nextTodo
         }),
       )
+      if (nextTodo) await patchRemote(todoId, nextTodo)
     },
-    [setTodos],
+    [patchRemote],
   )
 
   const deleteSubtask = useCallback(
-    (todoId, subtaskId) => {
+    async (todoId, subtaskId) => {
+      let nextTodo = null
       setTodos((prev) =>
-        normalizeTodos(prev).map((t) =>
-          t.id === todoId
-            ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== subtaskId) }
-            : t,
-        ),
+        normalizeTodos(prev).map((t) => {
+          if (t.id !== todoId) return t
+          nextTodo = {
+            ...t,
+            subtasks: t.subtasks.filter((s) => s.id !== subtaskId),
+          }
+          return nextTodo
+        }),
       )
+      if (nextTodo) await patchRemote(todoId, nextTodo)
     },
-    [setTodos],
+    [patchRemote],
   )
 
   const getTodosByPeriod = useCallback(
@@ -533,6 +778,16 @@ export function useTodos() {
     [todos, safeFreezes],
   )
 
+  /** Сколько day-целей на каждую дату (для календаря). */
+  const dayGoalCounts = useMemo(() => {
+    const counts = {}
+    for (const todo of normalizeTodos(todos)) {
+      if (todo.period !== 'day' || !todo.date) continue
+      counts[todo.date] = (counts[todo.date] || 0) + 1
+    }
+    return counts
+  }, [todos])
+
   const periodCounts = useMemo(() => {
     const today = toDateKey()
     const counts = { day: 0, week: 0, month: 0, year: 0 }
@@ -557,6 +812,8 @@ export function useTodos() {
 
   return {
     todos,
+    loading,
+    error,
     addTodo,
     updateTodo,
     addSpentTime,
@@ -575,6 +832,7 @@ export function useTodos() {
     getProgress,
     completedDaysSet,
     dayStatuses,
+    dayGoalCounts,
     periodCounts,
     periodHasActive,
     streak,

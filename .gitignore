@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Env (secrets)
+.env
+.env.*
+!.env.example
+
+# Local probe / test scripts (may contain credentials)
+scripts/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

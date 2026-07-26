@@ -4,7 +4,7 @@ import { sanitizeTodoText } from '../utils/text'
 import { toDateKey } from '../utils/dates'
 
 function createId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  return crypto.randomUUID()
 }
 
 function normalizeHabits(raw) {
