@@ -18,6 +18,44 @@ async function touchCurrentDevice(userId) {
   const user_agent =
     typeof navigator !== 'undefined' ? navigator.userAgent : ''
   const label = getDeviceLabel(user_agent)
+  const last_seen = new Date().toISOString()
+
+  // Одна запись на label: обновляем свежую, лишние с тем же label удаляем
+  const { data: sameLabel, error: listError } = await supabase
+    .from('user_devices')
+    .select('id, device_key, last_seen')
+    .eq('user_id', userId)
+    .eq('label', label)
+    .order('last_seen', { ascending: false })
+
+  if (listError) {
+    console.error('[auth] device list', listError.message)
+    return
+  }
+
+  const rows = sameLabel ?? []
+  const keep =
+    rows.find((r) => r.device_key === device_key) ?? rows[0] ?? null
+
+  if (keep?.id) {
+    const { error: updError } = await supabase
+      .from('user_devices')
+      .update({ device_key, user_agent, last_seen, label })
+      .eq('id', keep.id)
+      .eq('user_id', userId)
+    if (updError) console.error('[auth] device update', updError.message)
+
+    const removeIds = rows.filter((r) => r.id !== keep.id).map((r) => r.id)
+    if (removeIds.length > 0) {
+      const { error: delError } = await supabase
+        .from('user_devices')
+        .delete()
+        .eq('user_id', userId)
+        .in('id', removeIds)
+      if (delError) console.error('[auth] device dedupe', delError.message)
+    }
+    return
+  }
 
   const { error } = await supabase.from('user_devices').upsert(
     {
@@ -25,7 +63,7 @@ async function touchCurrentDevice(userId) {
       device_key,
       label,
       user_agent,
-      last_seen: new Date().toISOString(),
+      last_seen,
     },
     { onConflict: 'user_id,device_key' },
   )

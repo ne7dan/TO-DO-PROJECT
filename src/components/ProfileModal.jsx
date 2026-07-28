@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Monitor, X } from 'lucide-react'
 import { supabase } from '../supabaseClient'
 import { useLocale } from '../i18n/LocaleContext'
-import { getDeviceKey } from '../utils/deviceInfo'
+import { getDeviceKey, dedupeDevicesByLabel } from '../utils/deviceInfo'
 import {
   NICKNAME_MAX,
   NICKNAME_MIN,
@@ -91,7 +91,7 @@ export function ProfileModal({ user, open, onClose, onRequestPasswordReset }) {
 
       setProfile(nextProfile)
       setNickDraft(nextProfile.nickname || user.user_metadata?.nickname || '')
-      setDevices(deviceRows ?? [])
+      setDevices(dedupeDevicesByLabel(deviceRows ?? [], currentKey))
       setLoading(false)
     }
 
@@ -99,7 +99,7 @@ export function ProfileModal({ user, open, onClose, onRequestPasswordReset }) {
     return () => {
       cancelled = true
     }
-  }, [open, user])
+  }, [open, user, currentKey])
 
   if (!open) return null
 
