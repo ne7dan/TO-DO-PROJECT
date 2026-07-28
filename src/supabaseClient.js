@@ -6,11 +6,26 @@ const supabaseAnonKey =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   import.meta.env.VITE_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
+/** true, если URL и ключ заданы (локально в .env или в Vercel Environment Variables). */
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl &&
+    supabaseAnonKey &&
+    !String(supabaseAnonKey).includes('your_supabase'),
+)
+
+if (!isSupabaseConfigured) {
   console.error(
-    '[supabase] Задайте VITE_SUPABASE_URL и VITE_SUPABASE_PUBLISHABLE_KEY в файле .env',
+    '[supabase] Задайте VITE_SUPABASE_URL и VITE_SUPABASE_PUBLISHABLE_KEY ' +
+      '(локально: .env; на Vercel: Project → Settings → Environment Variables), ' +
+      'затем сделайте Redeploy.',
   )
 }
 
-/** Единый клиент Supabase для auth и запросов к таблице todos. */
-export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '')
+/**
+ * Единый клиент Supabase.
+ * При отсутствии env не падаем с белым экраном — подставляем заглушку.
+ */
+export const supabase = createClient(
+  isSupabaseConfigured ? supabaseUrl : 'https://placeholder.supabase.co',
+  isSupabaseConfigured ? supabaseAnonKey : 'public-anon-key',
+)

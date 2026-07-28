@@ -13,6 +13,7 @@ import { useTodos } from './hooks/useTodos'
 import { useHabits } from './hooks/useHabits'
 import { useLocale } from './i18n/LocaleContext'
 import { toDateKey } from './utils/dates'
+import { isSupabaseConfigured } from './supabaseClient'
 
 /** Основной экран приложения после успешной авторизации. */
 function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
@@ -282,6 +283,26 @@ export default function App() {
     recoveryMode,
     clearRecoveryMode,
   } = useAuth()
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-md space-y-3 text-center">
+          <h1 className="font-display text-xl font-semibold text-ink dark:text-zinc-50">
+            Нет настроек Supabase
+          </h1>
+          <p className="text-sm text-muted dark:text-zinc-400">
+            На Vercel добавьте переменные{' '}
+            <code className="text-ink dark:text-zinc-200">VITE_SUPABASE_URL</code> и{' '}
+            <code className="text-ink dark:text-zinc-200">
+              VITE_SUPABASE_PUBLISHABLE_KEY
+            </code>
+            , затем сделайте Redeploy.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
