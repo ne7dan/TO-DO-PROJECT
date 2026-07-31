@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLocale } from '../../i18n/LocaleContext'
 
 const fieldClass =
-  'w-full rounded-xl border border-black/[0.08] dark:border-zinc-700 bg-surface dark:bg-zinc-950 px-4 py-3 text-[15px] text-ink dark:text-zinc-50 outline-none focus:ring-2 focus:ring-[#B7D0DE]/40 dark:focus:ring-white/15'
+  'w-full rounded-xl border border-black/[0.08] dark:border-zinc-700 bg-surface dark:bg-zinc-950 px-4 py-3 text-[15px] text-ink dark:text-zinc-50 outline-none focus:ring-2 focus:ring-[var(--accent-glow)]'
 
 /**
  * Задать новый пароль после перехода по ссылке из письма.

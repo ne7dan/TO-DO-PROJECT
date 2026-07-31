@@ -17,14 +17,12 @@ import { toDateKey } from '../utils/dates'
 import {
   formatEstimate,
   formatTracked,
-  minutesToTimeInput,
   normalizeEstimateMinutes,
-  parseEstimateInput,
 } from '../utils/estimate'
 import { normalizePriority } from '../utils/todoMeta'
 import { useLocale } from '../i18n/LocaleContext'
 import { MetaBadge, MetaPicker } from './MetaChips'
-import { TODO_DRAG_TYPE } from '../hooks/useTodos'
+import { TODO_DRAG_TYPE, touchTodoDrag } from '../hooks/useTodos'
 
 export function TodoItem({
   todo,
@@ -51,9 +49,6 @@ export function TodoItem({
   const [draftPriority, setDraftPriority] = useState(
     normalizePriority(todo.priority),
   )
-  const [draftEstimate, setDraftEstimate] = useState(
-    minutesToTimeInput(todo.estimatedMinutes),
-  )
   const editInputRef = useRef(null)
 
   const doneSubtasks = todo.subtasks.filter((s) => s.completed).length
@@ -69,10 +64,82 @@ export function TodoItem({
     return undefined
   }, [editing])
 
+  const clearTouchDragVisual = () => {
+    document.querySelectorAll('[data-todo-drop].touch-drag-over').forEach((el) => {
+      el.classList.remove('touch-drag-over')
+    })
+    document.querySelectorAll('[data-cal-drop].touch-drag-over').forEach((el) => {
+      el.classList.remove('touch-drag-over')
+    })
+  }
+
+  const handleGripTouchStart = (e) => {
+    if (editing) return
+    const touch = e.touches[0]
+    if (!touch) return
+    touchTodoDrag.id = todo.id
+    setDragging(true)
+
+    const onMove = (ev) => {
+      if (touchTodoDrag.id !== todo.id) return
+      const t = ev.touches[0]
+      if (!t) return
+      ev.preventDefault()
+      clearTouchDragVisual()
+      const el = document.elementFromPoint(t.clientX, t.clientY)
+      const overTodo = el?.closest('[data-todo-drop]')
+      const overCal = el?.closest('[data-cal-drop]')
+      if (overTodo && overTodo.getAttribute('data-todo-drop') !== todo.id) {
+        overTodo.classList.add('touch-drag-over')
+      } else if (overCal) {
+        overCal.classList.add('touch-drag-over')
+      }
+    }
+
+    const onEnd = (ev) => {
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend', onEnd)
+      document.removeEventListener('touchcancel', onEnd)
+
+      const t = ev.changedTouches?.[0]
+      const el = t
+        ? document.elementFromPoint(t.clientX, t.clientY)
+        : null
+      const overTodo = el?.closest('[data-todo-drop]')
+      const overCal = el?.closest('[data-cal-drop]')
+      const sourceId = touchTodoDrag.id
+
+      clearTouchDragVisual()
+      touchTodoDrag.id = null
+      setDragging(false)
+      setDragOver(false)
+
+      if (!sourceId) return
+      if (overTodo) {
+        const targetId = overTodo.getAttribute('data-todo-drop')
+        if (targetId && targetId !== sourceId) onReorder?.(sourceId, targetId)
+        return
+      }
+      if (overCal) {
+        const dateKey = overCal.getAttribute('data-cal-drop')
+        if (dateKey) {
+          window.dispatchEvent(
+            new CustomEvent('todo-touch-calendar-drop', {
+              detail: { id: sourceId, dateKey },
+            }),
+          )
+        }
+      }
+    }
+
+    document.addEventListener('touchmove', onMove, { passive: false })
+    document.addEventListener('touchend', onEnd)
+    document.addEventListener('touchcancel', onEnd)
+  }
+
   const startEdit = () => {
     setDraftText(todo.text)
     setDraftPriority(normalizePriority(todo.priority))
-    setDraftEstimate(minutesToTimeInput(todo.estimatedMinutes))
     setEditing(true)
   }
 
@@ -80,17 +147,13 @@ export function TodoItem({
     setEditing(false)
     setDraftText(todo.text)
     setDraftPriority(normalizePriority(todo.priority))
-    setDraftEstimate(minutesToTimeInput(todo.estimatedMinutes))
   }
 
   const saveEdit = () => {
     if (!draftText.trim()) return
-    const parsed = parseEstimateInput(draftEstimate)
-    if (parsed == null) return
     onUpdate(todo.id, {
       text: draftText,
       priority: draftPriority,
-      estimatedMinutes: parsed,
     })
     setEditing(false)
   }
@@ -110,14 +173,17 @@ export function TodoItem({
 
   return (
     <li
+      data-todo-drop={todo.id}
       draggable={!editing}
       onDragStart={(e) => {
         e.dataTransfer.setData(TODO_DRAG_TYPE, todo.id)
         e.dataTransfer.setData('text/plain', todo.id)
         e.dataTransfer.effectAllowed = 'copyMove'
+        touchTodoDrag.id = todo.id
         setDragging(true)
       }}
       onDragEnd={() => {
+        touchTodoDrag.id = null
         setDragging(false)
         setDragOver(false)
       }}
@@ -137,23 +203,25 @@ export function TodoItem({
       }}
       className={[
         'group ui-inset transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.03)] dark:bg-zinc-950/60 dark:hover:shadow-sm',
+        '[&.touch-drag-over]:border-[var(--accent-color)] [&.touch-drag-over]:ring-1 [&.touch-drag-over]:ring-[var(--accent-glow)]',
         dragOver
-          ? 'border-[#B7D0DE] dark:border-sky-500 ring-1 ring-[#B7D0DE]/50 dark:ring-sky-400/40'
+          ? 'border-[var(--accent-color)] ring-1 ring-[var(--accent-glow)]'
           : '',
         dragging ? 'opacity-50' : '',
         removing ? 'animate-removing' : 'animate-fade-in',
       ].join(' ')}
     >
-      <div className="flex items-start gap-2 p-3.5">
+      <div className="flex items-start gap-1 p-3.5">
         <button
           type="button"
           draggable={false}
           aria-label={t('todo.drag')}
           title={t('todo.drag')}
-          className="mt-0.5 cursor-grab active:cursor-grabbing p-0.5 text-muted/70 dark:text-zinc-400 hover:text-ink-soft dark:hover:text-zinc-200"
+          className="touch-target mt-0 flex shrink-0 cursor-grab active:cursor-grabbing items-center justify-center text-muted/70 dark:text-zinc-400 hover:text-ink-soft dark:hover:text-zinc-200 active:text-ink-soft"
           onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={handleGripTouchStart}
         >
-          <GripVertical size={15} strokeWidth={1.75} />
+          <GripVertical size={18} strokeWidth={1.75} />
         </button>
 
         <button
@@ -161,17 +229,26 @@ export function TodoItem({
           onClick={() => onToggle(todo.id)}
           aria-label={todo.completed ? t('todo.uncomplete') : t('todo.complete')}
           className={[
-            'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all duration-200',
+            'todo-check touch-target mt-0 flex shrink-0 cursor-pointer items-center justify-center rounded-full transition-all duration-200',
             todo.completed
-              ? 'bg-[#7FAFC4] border-[#7FAFC4] text-white dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900'
-              : 'border-black/15 dark:border-zinc-500 text-transparent hover:border-[#7FAFC4] dark:hover:border-zinc-300',
+              ? 'text-[var(--accent-contrast)]'
+              : 'text-transparent',
           ].join(' ')}
         >
-          {todo.completed ? (
-            <Check size={12} strokeWidth={2.5} />
-          ) : (
-            <Circle size={12} strokeWidth={1.5} className="opacity-0" />
-          )}
+          <span
+            className={[
+              'flex h-6 w-6 items-center justify-center rounded-full border transition-all duration-200',
+              todo.completed
+                ? 'bg-[var(--accent-color)] border-[var(--accent-color)] shadow-[0_0_0_3px_var(--accent-glow)]'
+                : 'border-black/15 dark:border-[var(--border-color)] hover:border-[var(--accent-color)] active:border-[var(--accent-color)]',
+            ].join(' ')}
+          >
+            {todo.completed ? (
+              <Check size={14} strokeWidth={2.5} />
+            ) : (
+              <Circle size={14} strokeWidth={1.5} className="opacity-0" />
+            )}
+          </span>
         </button>
 
         <div className="min-w-0 flex-1">
@@ -194,20 +271,8 @@ export function TodoItem({
                     cancelEdit()
                   }
                 }}
-                className="w-full rounded-xl border border-black/[0.08] dark:border-zinc-500 bg-surface dark:bg-zinc-900 px-3 py-2 text-[15px] text-ink dark:text-zinc-50 outline-none focus:border-[#B5C9D4] dark:focus:border-zinc-400"
+                className="w-full rounded-xl border border-black/[0.08] dark:border-[var(--border-color)] bg-surface dark:bg-[var(--bg-card)] px-3 py-2 text-[15px] text-ink dark:text-[var(--text-main)] outline-none focus:border-[var(--accent-color)] focus:ring-2 focus:ring-[var(--accent-glow)]"
               />
-              <label className="block space-y-1">
-                <span className="text-[10px] uppercase tracking-[0.14em] text-muted dark:text-zinc-400">
-                  {t('todo.estimate')}
-                </span>
-                <input
-                  type="time"
-                  value={draftEstimate}
-                  onChange={(e) => setDraftEstimate(e.target.value || '00:00')}
-                  aria-label={t('todo.estimate')}
-                  className="w-full rounded-xl border border-black/[0.08] dark:border-zinc-500 bg-surface dark:bg-zinc-900 px-3 py-1.5 text-sm tabular-nums text-ink dark:text-zinc-50 outline-none focus:border-[#B5C9D4] dark:focus:border-zinc-400"
-                />
-              </label>
               <MetaPicker
                 priority={draftPriority}
                 onPriorityChange={setDraftPriority}
@@ -235,26 +300,28 @@ export function TodoItem({
           ) : (
             <>
               <div className="flex items-start gap-2">
-                <p
-                  className={[
-                    'flex-1 text-[15px] leading-snug transition-colors',
-                    todo.completed
-                      ? 'text-muted/70 dark:text-zinc-500 line-through'
-                      : 'text-ink dark:text-zinc-50',
-                  ].join(' ')}
-                >
-                  {displayTodoText(todo.text)}
+                <p className="flex-1 min-w-0 text-[15px] leading-snug">
+                  <span
+                    className={[
+                      'todo-strike transition-colors',
+                      todo.completed
+                        ? 'is-done text-muted/70 dark:text-zinc-500'
+                        : 'text-ink dark:text-zinc-50',
+                    ].join(' ')}
+                  >
+                    {displayTodoText(todo.text)}
+                  </span>
                 </p>
 
-                <div className="flex shrink-0 items-center gap-0.5 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <div className="flex shrink-0 items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
                     onClick={startEdit}
                     aria-label={t('todo.edit')}
                     title={t('todo.edit')}
-                    className="p-1.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-zinc-800 text-muted dark:text-zinc-300"
+                    className="touch-target flex items-center justify-center rounded-xl hover:bg-black/[0.04] dark:hover:bg-zinc-800 active:bg-black/[0.06] dark:active:bg-zinc-800 text-muted dark:text-zinc-300"
                   >
-                    <Pencil size={15} strokeWidth={1.75} />
+                    <Pencil size={16} strokeWidth={1.75} />
                   </button>
                   {!todo.completed &&
                     todo.period === 'day' &&
@@ -263,10 +330,10 @@ export function TodoItem({
                         type="button"
                         onClick={() => onFocus(todo)}
                         aria-label={t('todo.focus')}
-                        className="p-1.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-zinc-800 text-muted dark:text-zinc-300"
+                        className="touch-target flex items-center justify-center rounded-xl hover:bg-black/[0.04] dark:hover:bg-zinc-800 active:bg-black/[0.06] dark:active:bg-zinc-800 text-muted dark:text-zinc-300"
                         title="Focus Mode"
                       >
-                        <Focus size={15} strokeWidth={1.75} />
+                        <Focus size={16} strokeWidth={1.75} />
                       </button>
                     )}
                   <button
@@ -275,21 +342,21 @@ export function TodoItem({
                     aria-label={
                       expanded ? t('todo.collapseSteps') : t('todo.expandSteps')
                     }
-                    className="p-1.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-zinc-800 text-muted dark:text-zinc-300"
+                    className="touch-target flex items-center justify-center rounded-xl hover:bg-black/[0.04] dark:hover:bg-zinc-800 active:bg-black/[0.06] dark:active:bg-zinc-800 text-muted dark:text-zinc-300"
                   >
                     {expanded ? (
-                      <ChevronDown size={15} strokeWidth={1.75} />
+                      <ChevronDown size={16} strokeWidth={1.75} />
                     ) : (
-                      <ChevronRight size={15} strokeWidth={1.75} />
+                      <ChevronRight size={16} strokeWidth={1.75} />
                     )}
                   </button>
                   <button
                     type="button"
                     onClick={handleDelete}
                     aria-label={t('todo.delete')}
-                    className="p-1.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-zinc-800 text-muted/80 dark:text-zinc-400 hover:text-ink dark:hover:text-zinc-100"
+                    className="touch-target flex items-center justify-center rounded-xl hover:bg-black/[0.04] dark:hover:bg-zinc-800 active:bg-black/[0.06] dark:active:bg-zinc-800 text-muted/80 dark:text-zinc-400 hover:text-ink dark:hover:text-zinc-100"
                   >
-                    <Trash2 size={15} strokeWidth={1.75} />
+                    <Trash2 size={16} strokeWidth={1.75} />
                   </button>
                 </div>
               </div>
@@ -335,83 +402,101 @@ export function TodoItem({
         </div>
       </div>
 
-      {expanded && !editing && (
-        <div className="border-t border-black/[0.05] dark:border-zinc-700 px-3.5 pb-3.5 pt-2.5 space-y-2 animate-fade-in">
-          {todo.subtasks.map((sub) => (
-            <div
-              key={sub.id}
-              className="flex items-center gap-2.5 pl-1 group/sub"
-            >
-              <button
-                type="button"
-                onClick={() => onToggleSubtask(todo.id, sub.id)}
-                aria-label={
-                  sub.completed
-                    ? t('todo.uncompleteStep')
-                    : t('todo.completeStep')
-                }
-                className={[
-                  'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-all',
-                  sub.completed
-                    ? 'bg-[#7FAFC4] border-[#7FAFC4] text-white dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900'
-                    : 'border-black/15 dark:border-zinc-500',
-                ].join(' ')}
+      <div
+        className={['todo-accordion', expanded && !editing ? 'is-open' : '']
+          .filter(Boolean)
+          .join(' ')}
+        aria-hidden={!(expanded && !editing)}
+      >
+        <div className="todo-accordion__inner">
+          <div className="border-t border-black/[0.05] dark:border-zinc-700 px-3.5 pb-3.5 pt-2.5 space-y-2">
+            {todo.subtasks.map((sub) => (
+              <div
+                key={sub.id}
+                className="flex items-center gap-2.5 pl-1 group/sub"
               >
-                {sub.completed && <Check size={10} strokeWidth={2.5} />}
-              </button>
-              <span
-                className={[
-                  'flex-1 text-sm',
-                  sub.completed
-                    ? 'line-through text-muted/70 dark:text-zinc-500'
-                    : 'text-ink-soft dark:text-zinc-200',
-                ].join(' ')}
-              >
-                {displayTodoText(sub.text)}
-              </span>
-              <button
-                type="button"
-                onClick={() => onDeleteSubtask(todo.id, sub.id)}
-                aria-label={t('todo.deleteStep')}
-                className="p-1 rounded-xl opacity-0 group-hover/sub:opacity-100 transition-opacity text-muted hover:text-ink dark:hover:text-zinc-100"
-              >
-                <X size={13} />
-              </button>
-            </div>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => onToggleSubtask(todo.id, sub.id)}
+                  aria-label={
+                    sub.completed
+                      ? t('todo.uncompleteStep')
+                      : t('todo.completeStep')
+                  }
+                  className={[
+                    'todo-check touch-target flex shrink-0 items-center justify-center rounded-full transition-all',
+                    sub.completed
+                      ? 'text-[var(--accent-contrast)]'
+                      : '',
+                  ].join(' ')}
+                >
+                  <span
+                    className={[
+                      'flex h-5 w-5 items-center justify-center rounded-full border transition-all',
+                      sub.completed
+                        ? 'bg-[var(--accent-color)] border-[var(--accent-color)]'
+                        : 'border-black/15 dark:border-[var(--border-color)] active:border-[var(--accent-color)]',
+                    ].join(' ')}
+                  >
+                    {sub.completed && <Check size={11} strokeWidth={2.5} />}
+                  </span>
+                </button>
+                <span className="flex-1 min-w-0">
+                  <span
+                    className={[
+                      'todo-strike text-sm',
+                      sub.completed
+                        ? 'is-done text-muted/70 dark:text-zinc-500'
+                        : 'text-ink-soft dark:text-zinc-200',
+                    ].join(' ')}
+                  >
+                    {displayTodoText(sub.text)}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onDeleteSubtask(todo.id, sub.id)}
+                  aria-label={t('todo.deleteStep')}
+                  className="touch-target flex items-center justify-center rounded-xl opacity-100 sm:opacity-0 sm:group-hover/sub:opacity-100 transition-opacity text-muted hover:text-ink dark:hover:text-zinc-100 active:bg-black/[0.04] dark:active:bg-zinc-800"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            ))}
 
-          <form
-            onSubmit={handleAddSubtask}
-            className="flex items-center gap-2 pt-1"
-          >
-            <label className="flex flex-1 min-w-0 items-center gap-2 rounded-xl border border-black/[0.06] dark:border-zinc-600 bg-surface dark:bg-zinc-900 px-2.5 py-1.5">
-              <Circle
-                size={14}
-                strokeWidth={1.5}
-                className="shrink-0 text-muted/60 dark:text-zinc-400"
-                aria-hidden
-              />
-              <input
-                type="text"
-                value={subtaskText}
-                onChange={(e) =>
-                  setSubtaskText(e.target.value.slice(0, MAX_TODO_TEXT_LENGTH))
-                }
-                maxLength={MAX_TODO_TEXT_LENGTH}
-                placeholder={t('todo.addStepPlaceholder')}
-                className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-muted/60 text-ink-soft dark:text-zinc-100"
-              />
-            </label>
-            <button
-              type="submit"
-              aria-label={t('todo.addStep')}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.06] dark:border-zinc-600 hover:bg-canvas-warm dark:hover:bg-zinc-800 transition-colors text-muted dark:text-zinc-300"
+            <form
+              onSubmit={handleAddSubtask}
+              className="flex items-center gap-2 pt-1"
             >
-              <Plus size={14} />
-            </button>
-          </form>
+              <label className="flex flex-1 min-w-0 items-center gap-2 rounded-xl border border-black/[0.06] dark:border-zinc-600 bg-surface dark:bg-zinc-900 px-2.5 py-1.5">
+                <Circle
+                  size={14}
+                  strokeWidth={1.5}
+                  className="shrink-0 text-muted/60 dark:text-zinc-400"
+                  aria-hidden
+                />
+                <input
+                  type="text"
+                  value={subtaskText}
+                  onChange={(e) =>
+                    setSubtaskText(e.target.value.slice(0, MAX_TODO_TEXT_LENGTH))
+                  }
+                  maxLength={MAX_TODO_TEXT_LENGTH}
+                  placeholder={t('todo.addStepPlaceholder')}
+                  className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-muted/60 text-ink-soft dark:text-zinc-100"
+                />
+              </label>
+              <button
+                type="submit"
+                aria-label={t('todo.addStep')}
+                className="touch-target flex items-center justify-center rounded-xl border border-black/[0.06] dark:border-zinc-600 hover:bg-canvas-warm dark:hover:bg-zinc-800 active:bg-canvas-warm dark:active:bg-zinc-800 transition-colors text-muted dark:text-zinc-300"
+              >
+                <Plus size={16} />
+              </button>
+            </form>
+          </div>
         </div>
-      )}
+      </div>
     </li>
   )
 }

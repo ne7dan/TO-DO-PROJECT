@@ -27,11 +27,16 @@ function clampMinutes(value, fallback) {
   return Math.min(MAX_MINUTES, n)
 }
 
-function formatTime(totalSeconds) {
+function formatTimeParts(totalSeconds) {
   const safe = Math.max(0, Math.floor(totalSeconds))
   const h = Math.floor(safe / 3600)
   const m = Math.floor((safe % 3600) / 60)
   const s = safe % 60
+  return { h, m, s, key: safe }
+}
+
+function formatTime(totalSeconds) {
+  const { h, m, s } = formatTimeParts(totalSeconds)
   if (h > 0) {
     return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }
@@ -63,6 +68,78 @@ function parseTimeInput(value) {
   return Math.min(MAX_MINUTES * 60, Math.round(asNumber * 60))
 }
 
+function BlinkColon({ running }) {
+  return (
+    <span
+      aria-hidden
+      className={running ? 'animate-colon-blink inline-block px-[0.02em]' : 'inline-block px-[0.02em]'}
+    >
+      :
+    </span>
+  )
+}
+
+/** Уровень «жидкости» 0–100 (оставшееся время относительно текущей базы). */
+function LiquidFill({ level, finishing = false }) {
+  const clamped = Math.min(100, Math.max(0, level))
+  const waveId = useId().replace(/:/g, '')
+
+  return (
+    <div
+      className={[
+        'pointer-events-none absolute inset-0 overflow-hidden rounded-xl',
+        finishing ? 'animate-liquid-finish' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      aria-hidden
+    >
+      <div
+        className="absolute inset-x-0 bottom-0 transition-[height] duration-1000 linear"
+        style={{ height: `${clamped}%` }}
+      >
+        <svg
+          className="animate-liquid-wave absolute -top-3 left-0 h-4 w-[200%] text-[var(--accent-muted)] opacity-70"
+          viewBox="0 0 1200 40"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id={`liq-${waveId}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.95" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0.35" />
+            </linearGradient>
+          </defs>
+          <path
+            fill={`url(#liq-${waveId})`}
+            d="M0 20 Q150 0 300 20 T600 20 T900 20 T1200 20 V40 H0 Z"
+          />
+          <path
+            fill="currentColor"
+            opacity="0.35"
+            d="M0 22 Q150 38 300 22 T600 22 T900 22 T1200 22 V40 H0 Z"
+          />
+        </svg>
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(to bottom, color-mix(in srgb, var(--accent-muted) 35%, transparent), color-mix(in srgb, var(--accent-color) 18%, transparent), color-mix(in srgb, var(--accent-hover) 28%, transparent))',
+          }}
+        />
+      </div>
+      {finishing && (
+        <div
+          className="absolute inset-0 animate-liquid-finish-ring"
+          style={{
+            background:
+              'radial-gradient(circle at center, var(--accent-glow) 0%, transparent 65%)',
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
 function EditableTimeDisplay({
   seconds,
   running,
@@ -75,6 +152,7 @@ function EditableTimeDisplay({
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
   const closedRef = useRef(false)
+  const { h, m, s } = formatTimeParts(seconds)
 
   const startEdit = () => {
     if (running) return
@@ -137,7 +215,20 @@ function EditableTimeDisplay({
       }
       className={className}
     >
-      {formatTime(seconds)}
+      {h > 0 && (
+        <>
+          <span>{h}</span>
+          <BlinkColon running={running} />
+        </>
+      )}
+      <span>{String(m).padStart(2, '0')}</span>
+      <BlinkColon running={running} />
+      <span
+        key={running ? `s-${s}` : 's-static'}
+        className={running ? 'animate-sec-tick' : undefined}
+      >
+        {String(s).padStart(2, '0')}
+      </span>
     </button>
   )
 }
@@ -623,6 +714,9 @@ export function Pomodoro({
   const [mode, setMode] = useState('pomodoro')
   const [phase, setPhase] = useState('work')
   const [seconds, setSeconds] = useState(DEFAULT_WORK_MIN * 60)
+  /** База для «воды»: при ручной смене времени пересчитывается, чтобы уровень оставался полным. */
+  const [liquidTotal, setLiquidTotal] = useState(DEFAULT_WORK_MIN * 60)
+  const [finishPulse, setFinishPulse] = useState(false)
   const [running, setRunning] = useState(false)
   // На мобильных панель свёрнута; на ПК — открыта (без реакции на resize)
   const [collapsed, setCollapsed] = useState(() => {
@@ -649,10 +743,17 @@ export function Pomodoro({
   focusIdRef.current = focusTask?.id
   trackRef.current = onTrackFocusTime
 
-  const workSeconds = Math.max(1, settings.workMin) * 60
-  const breakSeconds = Math.max(0, settings.breakMin) * 60
   const freeCountdown = Math.max(0, settings.freeMin) * 60
   const isFreeStopwatch = mode === 'free' && freeCountdown === 0
+
+  const rebaseLiquid = useCallback((nextSeconds) => {
+    setLiquidTotal(Math.max(1, Math.floor(Number(nextSeconds)) || 1))
+  }, [])
+
+  const triggerFinishPulse = useCallback(() => {
+    setFinishPulse(true)
+    window.setTimeout(() => setFinishPulse(false), 800)
+  }, [])
 
   const openSettings = () => {
     if (running) return
@@ -675,9 +776,13 @@ export function Pomodoro({
 
     if (mode === 'pomodoro') {
       setPhase('work')
-      setSeconds(nextWork * 60)
+      const sec = nextWork * 60
+      setSeconds(sec)
+      rebaseLiquid(sec)
     } else {
-      setSeconds(nextFree * 60)
+      const sec = nextFree * 60
+      setSeconds(sec)
+      if (sec > 0) rebaseLiquid(sec)
     }
   }
 
@@ -687,9 +792,13 @@ export function Pomodoro({
     setSettingsOpen(false)
     if (mode === 'pomodoro') {
       setPhase('work')
-      setSeconds(Math.max(1, settings.workMin) * 60)
+      const sec = Math.max(1, settings.workMin) * 60
+      setSeconds(sec)
+      rebaseLiquid(sec)
     } else {
-      setSeconds(Math.max(0, settings.freeMin) * 60)
+      const sec = Math.max(0, settings.freeMin) * 60
+      setSeconds(sec)
+      if (sec > 0) rebaseLiquid(sec)
     }
   }
 
@@ -702,13 +811,12 @@ export function Pomodoro({
   const adjustMinutes = (deltaMin) => {
     const deltaSec = deltaMin * 60
     const maxSec = MAX_MINUTES * 60
-
-    setSeconds((prev) => {
-      if (mode === 'free' && settings.freeMin === 0) {
-        return Math.max(0, Math.min(maxSec, prev + deltaSec))
-      }
-      return Math.max(0, Math.min(maxSec, prev + deltaSec))
-    })
+    const next = Math.max(0, Math.min(maxSec, seconds + deltaSec))
+    setSeconds(next)
+    // Ручная смена = новая база «воды», уровень остаётся полным
+    if (!(mode === 'free' && settings.freeMin === 0) && next > 0) {
+      rebaseLiquid(next)
+    }
   }
 
   const setCustomTime = (totalSeconds) => {
@@ -719,6 +827,7 @@ export function Pomodoro({
     setRunning(false)
     setSettingsOpen(false)
     setSeconds(clamped)
+    if (clamped > 0) rebaseLiquid(clamped)
 
     if (mode === 'free') {
       setSettings((prev) => ({ ...prev, freeMin: minutes }))
@@ -732,7 +841,11 @@ export function Pomodoro({
 
     const workMin = Math.max(1, minutes || 1)
     setSettings((prev) => ({ ...prev, workMin }))
-    if (clamped < 1) setSeconds(workMin * 60)
+    if (clamped < 1) {
+      const sec = workMin * 60
+      setSeconds(sec)
+      rebaseLiquid(sec)
+    }
   }
 
   const enterZen = () => {
@@ -753,9 +866,13 @@ export function Pomodoro({
     setSettingsOpen(false)
     setPhase('work')
     if (nextMode === 'pomodoro') {
-      setSeconds(Math.max(1, settings.workMin) * 60)
+      const sec = Math.max(1, settings.workMin) * 60
+      setSeconds(sec)
+      rebaseLiquid(sec)
     } else {
-      setSeconds(Math.max(0, settings.freeMin) * 60)
+      const sec = Math.max(0, settings.freeMin) * 60
+      setSeconds(sec)
+      if (sec > 0) rebaseLiquid(sec)
     }
   }
 
@@ -790,6 +907,8 @@ export function Pomodoro({
 
       setSeconds((prev) => {
         if (prev <= 1) {
+          triggerFinishPulse()
+
           if (currentMode === 'pomodoro') {
             const nextPhase = phaseRef.current === 'work' ? 'break' : 'work'
             const nextSeconds =
@@ -801,7 +920,9 @@ export function Pomodoro({
               setPhase('work')
               setRunning(false)
               setSessionActive(false)
-              return Math.max(1, currentSettings.workMin) * 60
+              const sec = Math.max(1, currentSettings.workMin) * 60
+              rebaseLiquid(sec)
+              return sec
             }
 
             setPhase(nextPhase)
@@ -809,7 +930,10 @@ export function Pomodoro({
               setRunning(false)
               setSessionActive(false)
             }
-            return nextSeconds || Math.max(1, currentSettings.workMin) * 60
+            const sec =
+              nextSeconds || Math.max(1, currentSettings.workMin) * 60
+            if (sec > 0) rebaseLiquid(sec)
+            return sec
           }
 
           setRunning(false)
@@ -823,7 +947,7 @@ export function Pomodoro({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [running])
+  }, [running, rebaseLiquid, triggerFinishPulse])
 
   useEffect(() => {
     if (!focusTask) return
@@ -848,19 +972,10 @@ export function Pomodoro({
     }
   }, [seconds, running, sessionActive, mode, phase, t])
 
-  const totalForProgress =
-    mode === 'pomodoro'
-      ? phase === 'break'
-        ? breakSeconds || 1
-        : workSeconds
-      : freeCountdown || 1
-
-  const progress = isFreeStopwatch
+  // Уровень воды = остаток / текущая база (после ручной правки база = новое значение)
+  const liquidLevel = isFreeStopwatch
     ? 0
-    : Math.min(
-        100,
-        Math.max(0, ((totalForProgress - seconds) / totalForProgress) * 100),
-      )
+    : Math.min(100, Math.max(0, (seconds / Math.max(1, liquidTotal)) * 100))
 
   const subtitle = focusTask
     ? displayTodoText(focusTask.text)
@@ -907,7 +1022,7 @@ export function Pomodoro({
       <button
         type="button"
         onClick={() => setCollapsed(false)}
-        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-xl border border-black/[0.06] dark:border-zinc-700 bg-surface dark:bg-zinc-900/95 text-ink-soft dark:text-zinc-100 shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_40px_-16px_rgba(24,24,27,0.55)] backdrop-blur-md transition-transform hover:scale-105 active:scale-95"
+        className="pomodoro-fab fixed z-50 flex h-14 w-14 items-center justify-center rounded-xl border border-black/[0.06] dark:border-zinc-700 bg-surface dark:bg-zinc-900/95 text-ink-soft dark:text-zinc-100 shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_40px_-16px_rgba(24,24,27,0.55)] backdrop-blur-md transition-transform hover:scale-105 active:scale-95"
         aria-label={t('pomodoro.open')}
       >
         <Timer size={20} strokeWidth={1.75} />
@@ -921,8 +1036,14 @@ export function Pomodoro({
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 w-[min(100%-2.5rem,20.5rem)] max-sm:origin-bottom-right max-sm:scale-90 overflow-hidden rounded-xl border border-black/[0.06] dark:border-zinc-700/90 bg-surface dark:bg-zinc-900/95 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.65)] animate-slide-up">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#D5E2EA]/70 to-transparent dark:from-zinc-800/40" />
+    <div className="pomodoro-fab fixed z-50 w-[min(100%-2.5rem,20.5rem)] max-sm:origin-bottom-right max-sm:scale-90 overflow-hidden rounded-xl border border-black/[0.06] dark:border-zinc-700/90 bg-surface dark:bg-zinc-900/95 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.65)] animate-slide-up">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b to-transparent"
+        style={{
+          backgroundImage:
+            'linear-gradient(to bottom, color-mix(in srgb, var(--accent-soft) 85%, transparent), transparent)',
+        }}
+      />
 
       <div className="relative p-4">
         <div className="flex items-start justify-between gap-2 mb-3">
@@ -988,31 +1109,28 @@ export function Pomodoro({
           />
         </div>
 
-        <div className="relative mt-3 mb-1 rounded-xl border border-black/[0.05] dark:border-zinc-800 bg-gradient-to-b from-canvas-warm to-surface dark:from-zinc-950/80 dark:to-zinc-900/40 px-3 pt-3 pb-3.5">
+        <div className="relative mt-3 mb-1 overflow-hidden rounded-xl border border-black/[0.05] dark:border-zinc-800 bg-gradient-to-b from-canvas-warm to-surface dark:from-zinc-950/80 dark:to-zinc-900/40 px-3 pt-3 pb-3.5">
           {!isFreeStopwatch && (
-            <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800">
-              <div
-                className="h-full rounded-full bg-zinc-800 dark:bg-zinc-200 transition-all duration-1000 linear"
-                style={{ width: `${Math.max(0, progress)}%` }}
-              />
-            </div>
+            <LiquidFill level={liquidLevel} finishing={finishPulse} />
           )}
 
-          <EditableTimeDisplay
-            seconds={seconds}
-            running={running}
-            onCommit={setCustomTime}
-            className={[
-              'mt-3 w-full text-center font-customMono text-[2.65rem] leading-none font-bold tabular-nums tracking-tight transition-colors',
-              running
-                ? 'text-zinc-900 dark:text-zinc-50 cursor-default'
-                : 'text-zinc-800 dark:text-zinc-100 hover:text-zinc-950 dark:hover:text-white cursor-text',
-            ].join(' ')}
-            inputClassName="mt-3 w-full text-center font-customMono text-[2.65rem] leading-none font-bold tabular-nums tracking-tight bg-transparent border-b border-zinc-300 dark:border-zinc-600 outline-none text-zinc-900 dark:text-zinc-100 py-0.5"
-          />
+          <div className="relative z-[1]">
+            <EditableTimeDisplay
+              seconds={seconds}
+              running={running}
+              onCommit={setCustomTime}
+              className={[
+                'w-full text-center font-customMono text-[2.65rem] leading-none font-bold tabular-nums tracking-tight transition-colors',
+                running
+                  ? 'text-zinc-900 dark:text-zinc-50 cursor-default'
+                  : 'text-zinc-800 dark:text-zinc-100 hover:text-zinc-950 dark:hover:text-white cursor-text',
+              ].join(' ')}
+              inputClassName="w-full text-center font-customMono text-[2.65rem] leading-none font-bold tabular-nums tracking-tight bg-transparent border-b border-zinc-300 dark:border-zinc-600 outline-none text-zinc-900 dark:text-zinc-100 py-0.5"
+            />
 
-          <div className="mt-3.5 flex justify-center">
-            <AdjustButtons onAdjust={adjustMinutes} />
+            <div className="mt-3.5 flex justify-center">
+              <AdjustButtons onAdjust={adjustMinutes} />
+            </div>
           </div>
         </div>
 

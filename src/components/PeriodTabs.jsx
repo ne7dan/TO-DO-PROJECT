@@ -49,10 +49,10 @@ export function PeriodTabs({
             className={[
               'relative rounded-xl px-3 py-3 pr-6 text-left transition-all duration-200 border',
               isActive
-                ? 'bg-[#D5E2EA] text-ink border-[#B5C9D4] shadow-[0_4px_12px_rgba(0,0,0,0.05)] dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100 opacity-100'
+                ? 'bg-[var(--accent-soft)] text-[var(--text-main)] border-[color-mix(in_srgb,var(--accent-color)_55%,var(--border-color))] shadow-[0_4px_12px_var(--accent-glow)] opacity-100'
                 : isDimmed
-                  ? 'bg-surface/70 dark:bg-zinc-900/40 border-black/[0.04] dark:border-zinc-700/60 text-muted/70 dark:text-zinc-400 opacity-55 hover:opacity-80'
-                  : 'ui-card text-muted dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-300 opacity-100 hover:border-black/10 dark:hover:border-zinc-500',
+                  ? 'bg-surface/70 dark:bg-[color-mix(in_srgb,var(--bg-card)_40%,transparent)] border-black/[0.04] dark:border-[var(--border-color)] text-muted/70 dark:text-[var(--text-muted)] opacity-55 hover:opacity-80'
+                  : 'ui-card text-muted opacity-100 hover:border-[color-mix(in_srgb,var(--accent-color)_35%,var(--border-color))]',
             ].join(' ')}
           >
             {isLive && (
@@ -63,10 +63,10 @@ export function PeriodTabs({
               className={[
                 'block text-sm font-medium',
                 isActive
-                  ? 'text-ink dark:text-zinc-900'
+                  ? 'text-[var(--text-main)]'
                   : isDimmed
-                    ? 'text-muted dark:text-zinc-400'
-                    : 'text-ink-soft dark:text-zinc-100',
+                    ? 'text-muted dark:text-[var(--text-muted)]'
+                    : 'text-ink-soft dark:text-[var(--text-soft)]',
               ].join(' ')}
             >
               {t(`period.${period.id}`)}
@@ -75,8 +75,8 @@ export function PeriodTabs({
               className={[
                 'mt-1 block text-[11px] tabular-nums',
                 isActive
-                  ? 'text-muted dark:text-zinc-500'
-                  : 'text-muted dark:text-zinc-400',
+                  ? 'text-[var(--text-muted)]'
+                  : 'text-muted dark:text-[var(--text-muted)]',
               ].join(' ')}
             >
               {percent}%
@@ -85,16 +85,16 @@ export function PeriodTabs({
               className={[
                 'mt-2 h-1 w-full overflow-hidden rounded-full',
                 isActive
-                  ? 'bg-[#C5D5DE] dark:bg-zinc-300'
-                  : 'bg-canvas-warm dark:bg-zinc-800',
+                  ? 'bg-[color-mix(in_srgb,var(--accent-color)_22%,var(--bg-warm))]'
+                  : 'bg-canvas-warm dark:bg-[var(--bg-warm)]',
               ].join(' ')}
             >
               <div
                 className={[
                   'h-full rounded-full transition-all duration-500 ease-out',
                   isActive
-                    ? 'bg-[#6A92A6] dark:bg-zinc-800'
-                    : 'bg-accent-blue dark:bg-zinc-500',
+                    ? 'bg-[var(--accent-color)]'
+                    : 'bg-[var(--accent-muted)] dark:bg-[color-mix(in_srgb,var(--accent-color)_55%,var(--bg-card))]',
                 ].join(' ')}
                 style={{ width: `${percent}%` }}
               />

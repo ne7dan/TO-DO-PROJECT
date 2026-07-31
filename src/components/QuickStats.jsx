@@ -64,7 +64,7 @@ export function QuickStats({
       className="animate-slide-up"
       style={{ animationDelay: '140ms' }}
     >
-      <article className="ui-card p-4 sm:p-5 dark:bg-zinc-900 dark:border-zinc-800">
+      <article className="ui-card p-4 sm:p-5">
         <div className="flex items-end justify-between gap-3 mb-3">
           <div className="min-w-0">
             <div className="relative inline-flex" ref={menuRef}>
@@ -109,8 +109,8 @@ export function QuickStats({
                           className={[
                             'w-full px-3 py-2 text-left text-sm transition-colors',
                             isSelected
-                              ? 'bg-[#D5E2EA] text-ink dark:bg-zinc-800 dark:text-zinc-100 font-medium'
-                              : 'text-muted dark:text-zinc-300 hover:bg-canvas-warm dark:hover:bg-zinc-800/60',
+                              ? 'bg-[var(--accent-soft)] text-[var(--text-main)] font-medium'
+                              : 'text-muted dark:text-[var(--text-muted)] hover:bg-canvas-warm dark:hover:bg-[var(--bg-warm)]',
                           ].join(' ')}
                         >
                           {t(`stats.overview.${item.id}`)}
@@ -137,7 +137,7 @@ export function QuickStats({
 
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-canvas-warm dark:bg-zinc-800 mb-3">
           <div
-            className="h-full rounded-full bg-[#6A92A6] dark:bg-zinc-200 transition-all duration-500"
+            className="h-full rounded-full bg-[var(--accent-color)] transition-all duration-500"
             style={{ width: `${percent}%` }}
           />
         </div>

@@ -5,6 +5,7 @@ import { SignUpForm } from './SignUpForm'
 import { RecoveryPasswordForm } from './RecoveryPasswordForm'
 import { useLocale } from '../../i18n/LocaleContext'
 import { useTheme } from '../../hooks/useTheme'
+import { ThemeCustomizer } from '../ThemeCustomizer'
 
 /**
  * Экран входа/регистрации / сброса пароля.
@@ -18,7 +19,14 @@ export function AuthScreen({
   clearRecoveryMode,
 }) {
   const { locale, t, toggleLocale } = useLocale()
-  const { isDark, toggleTheme } = useTheme()
+  const {
+    isDark,
+    toggleTheme,
+    bgTheme,
+    setBgTheme,
+    accent,
+    setAccent,
+  } = useTheme()
   const nextLocale = locale === 'ru' ? 'EN' : 'RU'
   const [mode, setMode] = useState('login')
   const [loading, setLoading] = useState(false)
@@ -99,9 +107,9 @@ export function AuthScreen({
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-8 sm:py-12">
+    <div className="app-header min-h-screen flex items-center justify-center px-4 py-8 sm:py-12">
       <div className="w-full max-w-md">
-        <div className="flex justify-end gap-2 mb-3">
+        <div className="relative z-40 flex justify-end gap-2 mb-3">
           <button
             type="button"
             onClick={toggleLocale}
@@ -109,10 +117,18 @@ export function AuthScreen({
               locale === 'ru' ? t('header.langToEn') : t('header.langToRu')
             }
             title={locale === 'ru' ? t('header.langToEn') : t('header.langToRu')}
-            className="ui-chip flex h-10 min-w-10 items-center justify-center rounded-xl px-2.5 font-customMono text-[11px] font-bold tracking-wide text-ink-soft dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200 transition-colors hover:bg-canvas-warm dark:hover:bg-zinc-800"
+            className="ui-chip touch-target flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-xl px-2.5 font-customMono text-[11px] font-bold tracking-wide text-ink-soft dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200 transition-colors hover:bg-canvas-warm dark:hover:bg-zinc-800 active:bg-canvas-warm dark:active:bg-zinc-800"
           >
             {nextLocale}
           </button>
+
+          <ThemeCustomizer
+            bgTheme={bgTheme}
+            accent={accent}
+            isDark={isDark}
+            onBgThemeChange={setBgTheme}
+            onAccentChange={setAccent}
+          />
 
           <button
             type="button"
@@ -120,7 +136,7 @@ export function AuthScreen({
             aria-label={
               isDark ? t('header.themeToLight') : t('header.themeToDark')
             }
-            className="ui-chip flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200 transition-colors hover:bg-canvas-warm dark:hover:bg-zinc-800"
+            className="ui-chip touch-target flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-ink-soft dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200 transition-colors hover:bg-canvas-warm dark:hover:bg-zinc-800 active:bg-canvas-warm dark:active:bg-zinc-800"
           >
             {isDark ? (
               <Sun size={18} strokeWidth={1.75} />
@@ -130,7 +146,7 @@ export function AuthScreen({
           </button>
         </div>
 
-        <div className="ui-card p-6 sm:p-8 dark:bg-zinc-900 dark:border-zinc-700 space-y-6">
+        <div className="ui-card p-6 sm:p-8 space-y-6">
           <div>
             <p className="font-display text-xs tracking-[0.2em] uppercase text-muted dark:text-zinc-400 mb-1">
               {t('header.tagline')}

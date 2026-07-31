@@ -16,7 +16,7 @@ import { validateSignUpPassword } from '../../utils/passwordValidation'
 import { validateEmail } from '../../utils/emailValidation'
 
 const fieldClass =
-  'w-full rounded-xl border border-black/[0.08] dark:border-zinc-700 bg-surface dark:bg-zinc-950 px-4 py-3 text-[15px] text-ink dark:text-zinc-50 outline-none focus:ring-2 focus:ring-[#B7D0DE]/40 dark:focus:ring-white/15'
+  'w-full rounded-xl border border-black/[0.08] dark:border-zinc-700 bg-surface dark:bg-zinc-950 px-4 py-3 text-[15px] text-ink dark:text-zinc-50 outline-none focus:ring-2 focus:ring-[var(--accent-glow)]'
 
 const fieldErrorRing =
   'ring-2 ring-rose-400/50 dark:ring-rose-500/40 focus:ring-rose-400/50'
@@ -274,7 +274,7 @@ export function SignUpForm({ onSubmit, loading, error }) {
                       className={[
                         'rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
                         active
-                          ? 'border-[#B5C9D4] bg-[#D5E2EA] text-ink dark:border-zinc-400 dark:bg-zinc-100 dark:text-zinc-900'
+                          ? 'border-[var(--accent-color)] bg-[var(--accent-soft)] text-[var(--text-main)]'
                           : 'border-black/[0.08] dark:border-zinc-700 bg-surface dark:bg-zinc-900 text-ink-soft dark:text-zinc-200 hover:bg-canvas-warm dark:hover:bg-zinc-800',
                       ].join(' ')}
                     >

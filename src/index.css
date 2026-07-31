@@ -1,8 +1,17 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap");
+@import "./fonts/fonts.css";
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Hover только на устройствах с точным указателем — без «залипания» на iPhone */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
 
 @theme {
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
@@ -11,24 +20,222 @@
   --color-success: #86efac;
   --color-success-text: #166534;
 
-  /* Light palette — bright on phones (Android OLED makes mid-grays look muddy) */
-  --color-canvas: #f5f6f8;
-  --color-canvas-warm: #eef0f3;
-  --color-surface: #ffffff;
-  --color-ink: #1a1a1a;
-  --color-ink-soft: #2d3142;
-  --color-muted: #5c6570;
-  --color-line: rgb(26 26 26 / 0.08);
-  --color-accent-blue: #9db8c8;
-  --color-accent-mint: #9fc4b0;
+  /* Bridged to runtime CSS variables (theme + accent) */
+  --color-canvas: var(--bg-main);
+  --color-canvas-warm: var(--bg-warm);
+  --color-surface: var(--bg-card);
+  --color-ink: var(--text-main);
+  --color-ink-soft: var(--text-soft);
+  --color-muted: var(--text-muted);
+  --color-line: var(--border-color);
+  --color-accent-blue: var(--accent-color);
+  --color-accent-mint: var(--accent-muted);
   --color-accent-amber: #d4b687;
 }
+
+/* ─── Базовые токены + акценты по умолчанию ─── */
+:root {
+  --bg-main: #f5f6f8;
+  --bg-warm: #eef0f3;
+  --bg-card: #ffffff;
+  --text-main: #1a1a1a;
+  --text-soft: #2d3142;
+  --text-muted: #5c6570;
+  --border-color: rgb(26 26 26 / 0.08);
+  --theme-glow-1: rgb(100 110 125 / 0.16);
+  --theme-glow-2: rgb(90 100 115 / 0.1);
+
+  --accent-color: #10b981;
+  --accent-hover: #059669;
+  --accent-glow: rgb(16 185 129 / 0.4);
+  --accent-soft: rgb(16 185 129 / 0.16);
+  --accent-muted: #6ee7b7;
+  --accent-contrast: #ffffff;
+}
+
+/* ─── Фоновые темы: светлый режим (заметно разные) ─── */
+html:not(.dark)[data-theme='cosmic-gray'] {
+  --bg-main: #d8dce3;
+  --bg-warm: #c9ced8;
+  --bg-card: #f4f5f7;
+  --text-main: #16181d;
+  --text-soft: #2a2f38;
+  --text-muted: #5a6270;
+  --border-color: rgb(22 24 29 / 0.14);
+  --theme-glow-1: rgb(70 78 92 / 0.18);
+  --theme-glow-2: rgb(55 62 75 / 0.12);
+}
+
+html:not(.dark)[data-theme='oled-black'] {
+  --bg-main: #ffffff;
+  --bg-warm: #ececef;
+  --bg-card: #f7f7f8;
+  --text-main: #050505;
+  --text-soft: #171717;
+  --text-muted: #525252;
+  --border-color: rgb(0 0 0 / 0.14);
+  --theme-glow-1: rgb(0 0 0 / 0.06);
+  --theme-glow-2: rgb(0 0 0 / 0.04);
+}
+
+html:not(.dark)[data-theme='night-blue'] {
+  --bg-main: #c5d8f0;
+  --bg-warm: #b0c8e6;
+  --bg-card: #eaf2fb;
+  --text-main: #0a1a30;
+  --text-soft: #152a48;
+  --text-muted: #4a6484;
+  --border-color: rgb(20 50 90 / 0.18);
+  --theme-glow-1: rgb(60 120 200 / 0.28);
+  --theme-glow-2: rgb(40 90 170 / 0.16);
+}
+
+/* Sage light — эко-минимализм, светлый */
+html:not(.dark)[data-theme='sage-light'] {
+  --bg-main: #d5e0db;
+  --bg-warm: #c5d3cc;
+  --bg-card: #ffffff;
+  --text-main: #2d3b36;
+  --text-soft: #3a4a44;
+  --text-muted: #62756e;
+  --border-color: #e1e9e5;
+  --theme-glow-1: rgb(100 140 120 / 0.18);
+  --theme-glow-2: rgb(80 120 100 / 0.1);
+}
+
+/* ─── Фоновые темы: тёмный режим (заметно разные) ─── */
+html.dark[data-theme='cosmic-gray'] {
+  --bg-main: #141417;
+  --bg-warm: #1c1c21;
+  --bg-card: #242429;
+  --text-main: #f4f4f5;
+  --text-soft: #e4e4e7;
+  --text-muted: #a1a1aa;
+  --border-color: #3f3f46;
+  --theme-glow-1: rgb(180 180 190 / 0.08);
+  --theme-glow-2: rgb(140 140 150 / 0.05);
+}
+
+html.dark[data-theme='oled-black'] {
+  --bg-main: #000000;
+  --bg-warm: #080808;
+  --bg-card: #0e0e0e;
+  --text-main: #fafafa;
+  --text-soft: #e5e5e5;
+  --text-muted: #a3a3a3;
+  --border-color: #2e2e2e;
+  --theme-glow-1: rgb(255 255 255 / 0.035);
+  --theme-glow-2: rgb(255 255 255 / 0.02);
+}
+
+html.dark[data-theme='night-blue'] {
+  --bg-main: #07122a;
+  --bg-warm: #0c1b3a;
+  --bg-card: #122548;
+  --text-main: #eaf2ff;
+  --text-soft: #d2e0f5;
+  --text-muted: #8aa0c0;
+  --border-color: #2a4570;
+  --theme-glow-1: rgb(70 130 220 / 0.22);
+  --theme-glow-2: rgb(40 90 180 / 0.14);
+}
+
+/* Matcha dark — эко-минимализм, тёмный */
+html.dark[data-theme='matcha-dark'] {
+  --bg-main: #1a231f;
+  --bg-warm: #1e2a25;
+  --bg-card: #232f2a;
+  --text-main: #e2ece9;
+  --text-soft: #d0ddd8;
+  --text-muted: #839791;
+  --border-color: #2e3d37;
+  --theme-glow-1: rgb(100 150 125 / 0.14);
+  --theme-glow-2: rgb(70 110 90 / 0.1);
+}
+
+/* ─── Акцентные цвета ─── */
+html[data-accent='green'] {
+  --accent-color: #10b981;
+  --accent-hover: #059669;
+  --accent-glow: rgb(16 185 129 / 0.42);
+  --accent-soft: rgb(16 185 129 / 0.18);
+  --accent-muted: #6ee7b7;
+  --accent-contrast: #ffffff;
+}
+
+html[data-accent='teal'] {
+  --accent-color: #2dd4bf;
+  --accent-hover: #14b8a6;
+  --accent-glow: rgb(45 212 191 / 0.42);
+  --accent-soft: rgb(45 212 191 / 0.18);
+  --accent-muted: #5eead4;
+  --accent-contrast: #042f2e;
+}
+
+html[data-accent='blue'] {
+  --accent-color: #38bdf8;
+  --accent-hover: #0ea5e9;
+  --accent-glow: rgb(56 189 248 / 0.45);
+  --accent-soft: rgb(56 189 248 / 0.18);
+  --accent-muted: #7dd3fc;
+  --accent-contrast: #0c1222;
+}
+
+html[data-accent='violet'] {
+  --accent-color: #a78bfa;
+  --accent-hover: #8b5cf6;
+  --accent-glow: rgb(167 139 250 / 0.45);
+  --accent-soft: rgb(167 139 250 / 0.18);
+  --accent-muted: #c4b5fd;
+  --accent-contrast: #ffffff;
+}
+
+html[data-accent='pink'] {
+  --accent-color: #e879f9;
+  --accent-hover: #d946ef;
+  --accent-glow: rgb(232 121 249 / 0.45);
+  --accent-soft: rgb(232 121 249 / 0.18);
+  --accent-muted: #f0abfc;
+  --accent-contrast: #1a0a1c;
+}
+
+html[data-accent='red'] {
+  --accent-color: #f87171;
+  --accent-hover: #ef4444;
+  --accent-glow: rgb(248 113 113 / 0.45);
+  --accent-soft: rgb(248 113 113 / 0.18);
+  --accent-muted: #fca5a5;
+  --accent-contrast: #ffffff;
+}
+
+html[data-accent='orange'] {
+  --accent-color: #fb923c;
+  --accent-hover: #f97316;
+  --accent-glow: rgb(251 146 60 / 0.45);
+  --accent-soft: rgb(251 146 60 / 0.2);
+  --accent-muted: #fdba74;
+  --accent-contrast: #1a1208;
+}
+
+html[data-accent='amber'] {
+  --accent-color: #fbbf24;
+  --accent-hover: #f59e0b;
+  --accent-glow: rgb(251 191 36 / 0.45);
+  --accent-soft: rgb(251 191 36 / 0.2);
+  --accent-muted: #fcd34d;
+  --accent-contrast: #1c1408;
+}
+
+/* ─── Акцентные цвета конец ─── */
 
 @layer base {
   html {
     @apply antialiased;
     /* `only` blocks Chrome/Android Auto Dark Mode from inverting light UI */
     color-scheme: only light;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   html.dark {
@@ -36,76 +243,177 @@
   }
 
   body {
-    @apply m-0 min-h-screen font-sans text-ink;
-    background-color: var(--color-canvas);
+    @apply m-0 min-h-screen font-sans;
+    color: var(--text-main);
+    background-color: var(--bg-main);
     background-image:
       radial-gradient(
-        ellipse 90% 55% at 50% -18%,
-        rgb(140 168 184 / 0.14),
-        transparent 55%
+        ellipse 95% 60% at 50% -20%,
+        var(--theme-glow-1),
+        transparent 58%
       ),
       radial-gradient(
-        ellipse 55% 40% at 100% 100%,
-        rgb(140 180 156 / 0.1),
-        transparent 50%
+        ellipse 55% 45% at 100% 100%,
+        var(--theme-glow-2),
+        transparent 52%
       ),
       radial-gradient(
         ellipse 45% 35% at 0% 85%,
-        rgb(196 168 120 / 0.08),
+        color-mix(in srgb, var(--accent-color) 10%, transparent),
         transparent 45%
       );
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease,
+      background-image 0.3s ease;
+    /* Safe Area: Dynamic Island / Home Indicator */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    /* Отключаем overscroll bounce у края WKWebView, где мешает UX */
+    overscroll-behavior-y: none;
   }
 
   html.dark body {
-    @apply bg-zinc-950 text-zinc-50;
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255, 255, 255, 0.05), transparent),
-      radial-gradient(ellipse 60% 40% at 0% 100%, rgba(255, 255, 255, 0.03), transparent);
+      radial-gradient(
+        ellipse 90% 55% at 50% -18%,
+        var(--theme-glow-1),
+        transparent
+      ),
+      radial-gradient(
+        ellipse 55% 45% at 0% 100%,
+        var(--theme-glow-2),
+        transparent
+      ),
+      radial-gradient(
+        ellipse 40% 35% at 100% 80%,
+        color-mix(in srgb, var(--accent-color) 10%, transparent),
+        transparent
+      );
   }
 
   * {
     @apply box-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Нативное ощущение: без случайного выделения UI, ввод текста — разрешён */
+  body,
+  button,
+  a,
+  [role='button'],
+  label,
+  li,
+  header,
+  nav,
+  aside {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+
+  /* Тактильный :active вместо залипающего :hover на тач-устройствах */
+  button:not(:disabled):active,
+  [role='button']:active,
+  .ui-chip:active,
+  .touch-target:active,
+  .todo-check:active,
+  .habit-check:active,
+  .accent-swatch:active,
+  .theme-swatch:active {
+    transform: scale(0.96);
+    opacity: 0.88;
+  }
+
+  .todo-check:active:not([aria-pressed='true']),
+  .habit-check:active {
+    border-color: var(--accent-color);
+    background-color: var(--accent-soft);
+  }
+
+  /* Ячейки календаря: без scale — иначе даты наезжают в плотной сетке */
+  button.cal-day:active {
+    transform: none;
   }
 }
 
 @layer components {
-  /* Crisp white cards on soft canvas — light only */
   .ui-card {
     border-radius: 12px;
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-line);
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
     box-shadow: 0 4px 14px rgb(0 0 0 / 0.05);
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease;
   }
 
   html.dark .ui-card {
-    background-color: rgb(24 24 27);
-    border-color: rgb(39 39 42);
     box-shadow: none;
   }
 
-  /* Nested / inset surfaces — never pure white on light */
   .ui-inset {
     border-radius: 12px;
-    background-color: var(--color-canvas-warm);
-    border: 1px solid var(--color-line);
+    background-color: var(--bg-warm);
+    border: 1px solid var(--border-color);
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease;
   }
 
   html.dark .ui-inset {
-    background-color: rgb(9 9 11 / 0.6);
-    border-color: rgb(63 63 70);
+    background-color: color-mix(in srgb, var(--bg-warm) 85%, var(--bg-main));
   }
 
   .ui-chip {
     border-radius: 12px;
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-line);
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
     box-shadow: 0 2px 8px rgb(0 0 0 / 0.025);
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease;
   }
 
   html.dark .ui-chip {
-    background-color: rgb(24 24 27);
-    border-color: rgb(39 39 42);
     box-shadow: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .accent-swatch:hover {
+      transform: translateY(-2px);
+    }
+  }
+
+  .accent-swatch:active {
+    transform: translateY(-1px) scale(0.96);
+  }
+
+  /* Минимальная зона нажатия Apple HIG: 44×44 */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .app-header {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .app-shell {
+    padding-bottom: max(7rem, calc(env(safe-area-inset-bottom) + 5rem));
+  }
+
+  .pomodoro-fab {
+    bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 0.75rem));
+    right: max(1.25rem, calc(env(safe-area-inset-right) + 0.75rem));
   }
 }
 
@@ -180,6 +488,165 @@
   animation: pulse-soft 1.5s ease-in-out infinite;
 }
 
-.animate-live-ping {
-  animation: live-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+@keyframes colon-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.22;
+  }
 }
+
+@keyframes sec-tick {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes liquid-wave {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes strike-draw {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.animate-colon-blink {
+  animation: colon-blink 1s ease-in-out infinite;
+}
+
+.animate-sec-tick {
+  display: inline-block;
+  animation: sec-tick 0.42s ease-out;
+  transform-origin: center bottom;
+}
+
+.animate-liquid-wave {
+  animation: liquid-wave 2.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-colon-blink,
+  .animate-sec-tick,
+  .animate-liquid-wave {
+    animation: none !important;
+  }
+}
+
+/* Вычёркивание — ширина = длина текста, не всей панели */
+.todo-strike {
+  position: relative;
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.todo-strike::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.58em;
+  height: 1.5px;
+  width: 0%;
+  background: currentColor;
+  opacity: 0.75;
+  pointer-events: none;
+  transition: width 0.38s ease-out;
+}
+
+.todo-strike.is-done::after {
+  width: 100%;
+}
+
+/* Accordion: плавный разворот через grid */
+.todo-accordion {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.32s ease,
+    opacity 0.28s ease;
+}
+
+.todo-accordion.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.todo-accordion__inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@keyframes liquid-finish {
+  0% {
+    filter: brightness(1) saturate(1);
+    transform: scale(1);
+    opacity: 1;
+  }
+  25% {
+    filter: brightness(1.45) saturate(1.2);
+    transform: scale(1.04);
+  }
+  55% {
+    filter: brightness(1.15) saturate(1.05);
+    transform: scale(0.98);
+    opacity: 0.92;
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-liquid-finish {
+  animation: liquid-finish 0.8s ease-out;
+}
+
+@keyframes liquid-finish-ring {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+}
+
+.animate-liquid-finish-ring {
+  animation: liquid-finish-ring 0.8s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-liquid-finish {
+    animation: none !important;
+  }
+
+  .animate-liquid-finish-ring {
+    animation: none !important;
+  }
+}
+

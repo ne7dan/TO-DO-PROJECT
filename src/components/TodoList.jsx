@@ -43,7 +43,7 @@ export function TodoList({
 
   return (
     <section
-      className="ui-card p-4 sm:p-5 space-y-4 animate-slide-up min-h-[280px] flex flex-col dark:bg-zinc-900 dark:border-zinc-700"
+      className="ui-card p-4 sm:p-5 space-y-4 animate-slide-up min-h-[280px] flex flex-col"
       style={{ animationDelay: '80ms' }}
     >
       {dayMeta && (
@@ -73,7 +73,7 @@ export function TodoList({
 
       <form onSubmit={handleSubmit} className="space-y-2.5">
         <div className="flex gap-2">
-          <label className="ui-inset flex flex-1 min-w-0 items-center gap-3 px-3.5 py-3 transition-colors focus-within:border-[#C9DCE6] dark:bg-zinc-950/60 dark:border-zinc-600 focus-within:ring-2 focus-within:ring-[#B7D0DE]/35 dark:focus-within:ring-white/15">
+          <label className="ui-inset flex flex-1 min-w-0 items-center gap-3 px-3.5 py-3 transition-colors focus-within:border-[var(--accent-color)] dark:bg-[color-mix(in_srgb,var(--bg-main)_60%,transparent)] dark:border-[var(--border-color)] focus-within:ring-2 focus-within:ring-[var(--accent-glow)]">
             <Circle
               size={18}
               strokeWidth={1.5}
@@ -101,7 +101,7 @@ export function TodoList({
             type="submit"
             aria-label={t('todos.add')}
             title={t('todos.add')}
-            className="inline-flex h-[3.125rem] w-[3.125rem] shrink-0 items-center justify-center rounded-xl border border-black/[0.06] bg-surface text-muted shadow-[0_4px_12px_rgba(0,0,0,0.05)] dark:bg-transparent dark:border-zinc-600 dark:text-zinc-300 dark:shadow-none transition-colors hover:bg-canvas-warm hover:text-ink dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+            className="inline-flex h-[3.125rem] w-[3.125rem] shrink-0 cursor-pointer items-center justify-center rounded-xl border border-black/[0.06] bg-surface text-muted shadow-[0_4px_12px_rgba(0,0,0,0.05)] dark:bg-transparent dark:border-zinc-600 dark:text-zinc-300 dark:shadow-none transition-all duration-200 hover:border-[color-mix(in_srgb,var(--accent-color)_55%,var(--border-color))] hover:bg-[var(--accent-soft)] hover:text-[var(--accent-hover)] hover:shadow-[0_0_0_2px_color-mix(in_srgb,var(--accent-color)_22%,transparent)] dark:hover:bg-[var(--accent-soft)] dark:hover:text-[var(--accent-muted)] dark:hover:border-[color-mix(in_srgb,var(--accent-color)_50%,var(--border-color))]"
           >
             <Plus size={18} strokeWidth={2} />
           </button>

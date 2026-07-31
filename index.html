@@ -1,20 +1,78 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="cosmic-gray" data-accent="green">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Минималистичный Todo App с календарём, страйками и Focus Mode" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
     <title>Todo</title>
+    <script>
+      (function () {
+        try {
+          var root = document.documentElement
+          var themes = {
+            'cosmic-gray': 1,
+            'oled-black': 1,
+            'night-blue': 1,
+            'matcha-sage': 1,
+            'matcha-dark': 1,
+            'sage-light': 1,
+          }
+          var accents = {
+            green: 1,
+            teal: 1,
+            blue: 1,
+            violet: 1,
+            pink: 1,
+            red: 1,
+            orange: 1,
+            amber: 1,
+          }
+
+          function read(key, fallback) {
+            var raw = localStorage.getItem(key)
+            if (raw == null) return fallback
+            try {
+              return JSON.parse(raw)
+            } catch (e) {
+              return fallback
+            }
+          }
+
+          var mode = read('todo-theme', 'dark')
+          var theme = read('todo-bg-theme', 'cosmic-gray')
+          var accent = read('todo-accent', 'green')
+
+          if (theme === 'matcha-dark' || theme === 'sage-light') theme = 'matcha-sage'
+          if (!themes[theme]) theme = 'cosmic-gray'
+          if (!accents[accent]) accent = 'green'
+
+          if (mode === 'light') root.classList.remove('dark')
+          else root.classList.add('dark')
+
+          var dataTheme = theme
+          if (theme === 'matcha-sage') {
+            dataTheme = mode === 'light' ? 'sage-light' : 'matcha-dark'
+          }
+
+          root.setAttribute('data-theme', dataTheme)
+          root.setAttribute('data-accent', accent)
+        } catch (e) {
+          document.documentElement.classList.add('dark')
+          document.documentElement.setAttribute('data-theme', 'cosmic-gray')
+          document.documentElement.setAttribute('data-accent', 'green')
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

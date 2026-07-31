@@ -2,10 +2,15 @@ import { useState } from 'react'
 import { LogOut, Moon, Sun, User } from 'lucide-react'
 import { useLocale } from '../i18n/LocaleContext'
 import { ProfileModal } from './ProfileModal'
+import { ThemeCustomizer } from './ThemeCustomizer'
 
 export function Header({
   isDark,
   onToggleTheme,
+  bgTheme,
+  accent,
+  onBgThemeChange,
+  onAccentChange,
   user,
   userEmail,
   onSignOut,
@@ -20,7 +25,7 @@ export function Header({
 
   return (
     <>
-      <header className="flex items-start justify-between gap-4 animate-fade-in">
+      <header className="app-header relative z-40 flex items-start justify-between gap-4 animate-fade-in">
         <div>
           <p className="font-display text-xs tracking-[0.2em] uppercase text-muted dark:text-zinc-300 mb-1">
             {t('header.tagline')}
@@ -62,10 +67,18 @@ export function Header({
               locale === 'ru' ? t('header.langToEn') : t('header.langToRu')
             }
             title={locale === 'ru' ? t('header.langToEn') : t('header.langToRu')}
-            className="ui-chip flex h-10 min-w-10 items-center justify-center rounded-xl px-2.5 font-customMono text-[11px] font-bold tracking-wide text-ink-soft dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200 transition-colors hover:bg-canvas-warm dark:hover:bg-zinc-800"
+            className="ui-chip touch-target flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-xl px-2.5 font-customMono text-[11px] font-bold tracking-wide text-ink-soft transition-colors hover:bg-[var(--bg-warm)] active:bg-[var(--bg-warm)]"
           >
             {nextLocale}
           </button>
+
+          <ThemeCustomizer
+            bgTheme={bgTheme}
+            accent={accent}
+            isDark={isDark}
+            onBgThemeChange={onBgThemeChange}
+            onAccentChange={onAccentChange}
+          />
 
           <button
             type="button"
@@ -73,7 +86,7 @@ export function Header({
             aria-label={
               isDark ? t('header.themeToLight') : t('header.themeToDark')
             }
-            className="ui-chip flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200 transition-colors hover:bg-canvas-warm dark:hover:bg-zinc-800"
+            className="ui-chip touch-target flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-[var(--bg-warm)] active:bg-[var(--bg-warm)]"
           >
             {isDark ? (
               <Sun size={18} strokeWidth={1.75} />
@@ -88,7 +101,7 @@ export function Header({
               onClick={() => setProfileOpen(true)}
               aria-label={t('profile.open')}
               title={t('profile.open')}
-              className="ui-chip flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200 transition-colors hover:bg-canvas-warm dark:hover:bg-zinc-800"
+              className="ui-chip touch-target flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-[var(--bg-warm)] active:bg-[var(--bg-warm)]"
             >
               <User size={18} strokeWidth={1.75} />
             </button>
@@ -100,7 +113,7 @@ export function Header({
               onClick={() => void onSignOut()}
               aria-label={t('auth.signOut')}
               title={t('auth.signOut')}
-              className="ui-chip flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200 transition-colors hover:bg-canvas-warm dark:hover:bg-zinc-800"
+              className="ui-chip touch-target flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-[var(--bg-warm)] active:bg-[var(--bg-warm)]"
             >
               <LogOut size={18} strokeWidth={1.75} />
             </button>

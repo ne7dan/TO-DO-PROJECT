@@ -24,6 +24,11 @@ export const PERIODS = [
 
 export const TODO_DRAG_TYPE = 'application/x-todo-id'
 
+/** Состояние touch-drag (HTML5 DnD на iOS не работает). */
+export const touchTodoDrag = {
+  id: null,
+}
+
 const SPENT_FLUSH_MS = 4000
 const STREAK_PERSIST_MS = 600
 const LOCAL_COMPLETED_KEY = 'todo-completed-days'

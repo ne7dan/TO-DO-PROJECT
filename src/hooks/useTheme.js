@@ -1,38 +1,70 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useLocalStorage } from './useLocalStorage'
+import {
+  ACCENT_STORAGE_KEY,
+  BG_THEME_STORAGE_KEY,
+  DEFAULT_ACCENT,
+  DEFAULT_BG_THEME,
+  DEFAULT_MODE,
+  MODE_STORAGE_KEY,
+  applyAppearance,
+  normalizeAccent,
+  normalizeBgTheme,
+  normalizeMode,
+} from '../utils/appearance'
 
-const THEME_COLORS = {
-  light: '#f5f6f8',
-  dark: '#09090b',
-}
-
-function syncThemeColor(theme) {
-  let meta = document.querySelector('meta[name="theme-color"][data-app-theme]')
-  if (!meta) {
-    meta = document.createElement('meta')
-    meta.setAttribute('name', 'theme-color')
-    meta.setAttribute('data-app-theme', 'true')
-    document.head.appendChild(meta)
-  }
-  meta.setAttribute('content', THEME_COLORS[theme] ?? THEME_COLORS.light)
-}
-
+/**
+ * Режим светлый/тёмный + фон темы + акцентный цвет.
+ * Атрибуты `data-theme` / `data-accent` и класс `dark` на <html>.
+ */
 export function useTheme() {
-  const [theme, setTheme] = useLocalStorage('todo-theme', 'light')
+  const [mode, setMode] = useLocalStorage(MODE_STORAGE_KEY, DEFAULT_MODE)
+  const [bgTheme, setBgThemeRaw] = useLocalStorage(
+    BG_THEME_STORAGE_KEY,
+    DEFAULT_BG_THEME,
+  )
+  const [accent, setAccentRaw] = useLocalStorage(
+    ACCENT_STORAGE_KEY,
+    DEFAULT_ACCENT,
+  )
+
+  const safeMode = normalizeMode(mode)
+  const safeBgTheme = normalizeBgTheme(bgTheme)
+  const safeAccent = normalizeAccent(accent)
 
   useEffect(() => {
-    const root = document.documentElement
-    if (theme === 'dark') {
-      root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
-    }
-    syncThemeColor(theme)
-  }, [theme])
+    applyAppearance({
+      mode: safeMode,
+      bgTheme: safeBgTheme,
+      accent: safeAccent,
+    })
+  }, [safeMode, safeBgTheme, safeAccent])
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
+  const toggleTheme = useCallback(() => {
+    setMode((prev) => (normalizeMode(prev) === 'dark' ? 'light' : 'dark'))
+  }, [setMode])
+
+  const setBgTheme = useCallback(
+    (next) => {
+      setBgThemeRaw(normalizeBgTheme(next))
+    },
+    [setBgThemeRaw],
+  )
+
+  const setAccent = useCallback(
+    (next) => {
+      setAccentRaw(normalizeAccent(next))
+    },
+    [setAccentRaw],
+  )
+
+  return {
+    theme: safeMode,
+    toggleTheme,
+    isDark: safeMode === 'dark',
+    bgTheme: safeBgTheme,
+    setBgTheme,
+    accent: safeAccent,
+    setAccent,
   }
-
-  return { theme, toggleTheme, isDark: theme === 'dark' }
 }

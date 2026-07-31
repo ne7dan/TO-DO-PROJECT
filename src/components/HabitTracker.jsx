@@ -35,7 +35,7 @@ export function HabitTracker({
 
   return (
     <section
-      className="ui-card p-4 sm:p-5 space-y-3 animate-slide-up dark:bg-zinc-900 dark:border-zinc-700"
+      className="ui-card p-4 sm:p-5 space-y-3 animate-slide-up"
       style={{ animationDelay: '100ms' }}
     >
       <div className="flex items-end justify-between gap-3">
@@ -82,7 +82,7 @@ export function HabitTracker({
         <button
           type="submit"
           aria-label={t('habits.add')}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-black/[0.06] bg-surface text-muted shadow-[0_4px_12px_rgba(0,0,0,0.05)] dark:bg-transparent dark:border-zinc-600 dark:text-zinc-300 dark:shadow-none hover:bg-canvas-warm dark:hover:bg-zinc-800 transition-colors"
+          className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-black/[0.06] bg-surface text-muted shadow-[0_4px_12px_rgba(0,0,0,0.05)] dark:bg-transparent dark:border-zinc-600 dark:text-zinc-300 dark:shadow-none hover:bg-canvas-warm dark:hover:bg-zinc-800 active:bg-canvas-warm dark:active:bg-zinc-800 transition-colors"
         >
           <Plus size={16} strokeWidth={2} />
         </button>
@@ -108,13 +108,20 @@ export function HabitTracker({
                     done ? t('habits.uncomplete') : t('habits.complete')
                   }
                   className={[
-                    'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all',
-                    done
-                      ? 'bg-[#7BB89A] border-[#7BB89A] text-white dark:bg-emerald-400 dark:border-emerald-400 dark:text-zinc-900'
-                      : 'border-black/15 dark:border-zinc-500',
+                    'habit-check touch-target flex shrink-0 items-center justify-center rounded-full transition-all',
+                    done ? 'text-[var(--accent-contrast)]' : '',
                   ].join(' ')}
                 >
-                  {done && <Check size={12} strokeWidth={2.5} />}
+                  <span
+                    className={[
+                      'flex h-6 w-6 items-center justify-center rounded-full border transition-all',
+                      done
+                        ? 'bg-[var(--accent-color)] border-[var(--accent-color)] shadow-[0_0_0_3px_var(--accent-glow)]'
+                        : 'border-black/15 dark:border-[var(--border-color)] hover:border-[var(--accent-color)] active:border-[var(--accent-color)]',
+                    ].join(' ')}
+                  >
+                    {done && <Check size={14} strokeWidth={2.5} />}
+                  </span>
                 </button>
                 <span
                   className={[
@@ -130,9 +137,9 @@ export function HabitTracker({
                   type="button"
                   onClick={() => onDelete(habit.id)}
                   aria-label={t('habits.delete')}
-                  className="p-1.5 rounded-xl text-muted hover:text-ink dark:hover:text-zinc-100 hover:bg-black/[0.04] dark:hover:bg-zinc-800"
+                  className="touch-target flex items-center justify-center rounded-xl text-muted hover:text-ink dark:hover:text-zinc-100 hover:bg-black/[0.04] dark:hover:bg-zinc-800 active:bg-black/[0.06] dark:active:bg-zinc-800"
                 >
-                  <Trash2 size={14} strokeWidth={1.75} />
+                  <Trash2 size={16} strokeWidth={1.75} />
                 </button>
               </li>
             )

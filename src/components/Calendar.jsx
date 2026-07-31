@@ -7,7 +7,7 @@ import {
   toDateKey,
 } from '../utils/dates'
 import { useLocale } from '../i18n/LocaleContext'
-import { TODO_DRAG_TYPE } from '../hooks/useTodos'
+import { TODO_DRAG_TYPE, touchTodoDrag } from '../hooks/useTodos'
 
 const STATUS_STYLES = {
   complete:
@@ -46,6 +46,19 @@ export function Calendar({
     setViewMonth(m - 1)
   }, [selectedDate])
 
+  useEffect(() => {
+    const onTouchCalendarDrop = (e) => {
+      const { id, dateKey } = e.detail || {}
+      if (id && dateKey) onDropTodo?.(id, dateKey, { copy: false })
+      setDropTarget(null)
+      touchTodoDrag.id = null
+    }
+    window.addEventListener('todo-touch-calendar-drop', onTouchCalendarDrop)
+    return () => {
+      window.removeEventListener('todo-touch-calendar-drop', onTouchCalendarDrop)
+    }
+  }, [onDropTodo])
+
   const cells = getMonthGrid(viewYear, viewMonth)
   const viewDate = new Date(viewYear, viewMonth, 1)
 
@@ -57,7 +70,7 @@ export function Calendar({
 
   return (
     <aside
-      className="ui-card p-4 sm:p-5 space-y-4 animate-slide-up dark:bg-zinc-900 dark:border-zinc-800"
+      className="ui-card p-4 sm:p-5 space-y-4 animate-slide-up"
       style={{ animationDelay: '120ms' }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -66,9 +79,9 @@ export function Calendar({
             type="button"
             onClick={() => goMonth(-1)}
             aria-label={t('calendar.prevMonth')}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-black/[0.06] text-muted hover:bg-canvas-warm dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-colors"
+            className="touch-target flex shrink-0 items-center justify-center rounded-xl border border-black/[0.06] text-muted hover:bg-canvas-warm dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 active:bg-canvas-warm dark:active:bg-zinc-800 transition-colors"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={18} />
           </button>
 
           <div className="min-w-0 px-0.5">
@@ -84,24 +97,24 @@ export function Calendar({
             type="button"
             onClick={() => goMonth(1)}
             aria-label={t('calendar.nextMonth')}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-black/[0.06] text-muted hover:bg-canvas-warm dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-colors"
+            className="touch-target flex shrink-0 items-center justify-center rounded-xl border border-black/[0.06] text-muted hover:bg-canvas-warm dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 active:bg-canvas-warm dark:active:bg-zinc-800 transition-colors"
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={18} />
           </button>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
           {streak >= 1 && (
             <div
-              className="flex items-center gap-1 rounded-xl border border-[#B5C9D4] bg-[#D5E2EA] dark:border-sky-700/50 dark:bg-sky-950/30 px-2 py-1.5"
+              className="flex items-center gap-1 rounded-xl border border-[color-mix(in_srgb,var(--accent-color)_45%,var(--border-color))] bg-[var(--accent-soft)] px-2 py-1.5"
               title={t('calendar.freezeTitle', { n: freezesLeft })}
             >
               <Snowflake
                 size={13}
                 strokeWidth={1.75}
-                className="text-[#5A8FA8] dark:text-sky-400"
+                className="text-[var(--accent-hover)]"
               />
-              <p className="text-xs font-semibold tabular-nums text-[#3A5F73] dark:text-sky-200 leading-none">
+              <p className="text-xs font-semibold tabular-nums text-[var(--accent-hover)] leading-none">
                 {freezesLeft}
               </p>
             </div>
@@ -139,11 +152,11 @@ export function Calendar({
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-1.5 text-center">
+      <div className="grid grid-cols-7 gap-1 text-center">
         {weekdays.map((day) => (
           <div
             key={day}
-            className="text-[10px] uppercase tracking-wider text-muted dark:text-zinc-300 py-1"
+            className="text-[10px] uppercase tracking-wider text-muted dark:text-zinc-300 py-1 truncate"
           >
             {day}
           </div>
@@ -151,7 +164,13 @@ export function Calendar({
 
         {cells.map((date, index) => {
           if (!date) {
-            return <div key={`empty-${index}`} className="aspect-square" />
+            return (
+              <div
+                key={`empty-${index}`}
+                className="aspect-square min-w-0"
+                aria-hidden
+              />
+            )
           }
 
           const key = toDateKey(date)
@@ -165,6 +184,7 @@ export function Calendar({
             <button
               key={key}
               type="button"
+              data-cal-drop={key}
               onClick={() => onSelectDate(key)}
               onDragOver={(e) => {
                 e.preventDefault()
@@ -182,6 +202,9 @@ export function Calendar({
                   e.dataTransfer.getData('text/plain')
                 if (id) onDropTodo?.(id, key, { copy: e.ctrlKey })
               }}
+              onTouchMove={() => {
+                if (touchTodoDrag.id) setDropTarget(key)
+              }}
               title={
                 status
                   ? `${key}: ${t(`calendar.status.${status}`)}${
@@ -190,31 +213,35 @@ export function Calendar({
                   : t('calendar.dropHint', { date: key })
               }
               className={[
-                'aspect-square rounded-xl flex flex-col items-center justify-center gap-0 font-customMono tabular-nums transition-all duration-200 leading-none',
+                'cal-day relative aspect-square min-w-0 w-full rounded-lg',
+                'flex items-center justify-center',
+                'font-customMono text-[11px] sm:text-xs tabular-nums leading-none',
+                'transition-[background-color,box-shadow,color,opacity] duration-200',
+                '[&.touch-drag-over]:ring-2 [&.touch-drag-over]:ring-[var(--accent-color)] [&.touch-drag-over]:z-[2]',
+                'active:opacity-80',
                 status
                   ? STATUS_STYLES[status]
-                  : 'bg-canvas-warm text-muted hover:bg-[#D5E2EA] dark:bg-zinc-800/80 dark:text-zinc-400 dark:hover:bg-zinc-700',
+                  : 'bg-canvas-warm text-muted hover:bg-[var(--accent-soft)] active:bg-[var(--accent-soft)] dark:bg-[color-mix(in_srgb,var(--bg-warm)_80%,transparent)] dark:text-[var(--text-muted)] dark:hover:bg-[var(--accent-soft)] dark:active:bg-[var(--accent-soft)]',
                 isToday && !isSelected
-                  ? 'ring-1 ring-[#B5C9D4] dark:ring-zinc-500'
+                  ? 'ring-1 ring-inset ring-[color-mix(in_srgb,var(--accent-color)_55%,var(--border-color))]'
                   : '',
                 isSelected
-                  ? 'ring-2 ring-[#6A92A6] dark:ring-zinc-100 ring-offset-2 ring-offset-surface dark:ring-offset-zinc-900 scale-[1.04] z-[1] shadow-[0_4px_12px_rgba(0,0,0,0.05)]'
+                  ? 'ring-2 ring-inset ring-[var(--accent-color)] z-[1] shadow-[0_0_0_1px_var(--accent-glow)]'
                   : '',
                 isDrop
-                  ? 'ring-2 ring-[#6A92A6] scale-105 z-[2]'
+                  ? 'ring-2 ring-inset ring-[var(--accent-color)] z-[2] shadow-[0_0_0_2px_var(--accent-glow)]'
                   : '',
               ].join(' ')}
             >
-              <span
-                className={[
-                  'text-[9px] font-semibold min-h-[0.7rem]',
-                  goalCount > 0 ? 'opacity-90' : 'opacity-0',
-                ].join(' ')}
-                aria-hidden={goalCount === 0}
-              >
-                {goalCount > 0 ? goalCount : '\u00A0'}
-              </span>
-              <span className="text-xs">{date.getDate()}</span>
+              {goalCount > 0 && (
+                <span
+                  className="pointer-events-none absolute top-0.5 right-0.5 min-w-[0.85rem] rounded-full px-0.5 text-[8px] font-semibold leading-tight opacity-90"
+                  aria-hidden
+                >
+                  {goalCount}
+                </span>
+              )}
+              <span className="relative z-0">{date.getDate()}</span>
             </button>
           )
         })}
