@@ -37,25 +37,33 @@ export function TodoItem({
   showSubtasksHint,
 }) {
   const { t, locale } = useLocale()
-  const [expanded, setExpanded] = useState(
-    todo.period === 'month' || todo.period === 'year',
-  )
+  const [expanded, setExpanded] = useState(false)
   const [subtaskText, setSubtaskText] = useState('')
   const [removing, setRemoving] = useState(false)
   const [editing, setEditing] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [justCompleted, setJustCompleted] = useState(false)
   const [draftText, setDraftText] = useState(todo.text)
   const [draftPriority, setDraftPriority] = useState(
     normalizePriority(todo.priority),
   )
   const editInputRef = useRef(null)
+  const wasCompletedRef = useRef(todo.completed)
 
   const doneSubtasks = todo.subtasks.filter((s) => s.completed).length
   const hasSubtasks = todo.subtasks.length > 0
   const priority = normalizePriority(todo.priority)
   const estimated = normalizeEstimateMinutes(todo.estimatedMinutes)
   const spent = Math.max(0, Math.floor(todo.spentSeconds || 0))
+  const showMetaRow =
+    !editing &&
+    (todo.habitId ||
+      priority !== 'none' ||
+      estimated > 0 ||
+      spent > 0 ||
+      hasSubtasks ||
+      (showSubtasksHint && expanded))
 
   useEffect(() => {
     if (!editing) return undefined
@@ -63,6 +71,15 @@ export function TodoItem({
     editInputRef.current?.select()
     return undefined
   }, [editing])
+
+  useEffect(() => {
+    const becameDone = todo.completed && !wasCompletedRef.current
+    wasCompletedRef.current = todo.completed
+    if (!becameDone) return undefined
+    setJustCompleted(true)
+    const id = window.setTimeout(() => setJustCompleted(false), 360)
+    return () => window.clearTimeout(id)
+  }, [todo.completed])
 
   const clearTouchDragVisual = () => {
     document.querySelectorAll('[data-todo-drop].touch-drag-over').forEach((el) => {
@@ -82,11 +99,11 @@ export function TodoItem({
 
     const onMove = (ev) => {
       if (touchTodoDrag.id !== todo.id) return
-      const t = ev.touches[0]
-      if (!t) return
+      const point = ev.touches[0]
+      if (!point) return
       ev.preventDefault()
       clearTouchDragVisual()
-      const el = document.elementFromPoint(t.clientX, t.clientY)
+      const el = document.elementFromPoint(point.clientX, point.clientY)
       const overTodo = el?.closest('[data-todo-drop]')
       const overCal = el?.closest('[data-cal-drop]')
       if (overTodo && overTodo.getAttribute('data-todo-drop') !== todo.id) {
@@ -101,9 +118,9 @@ export function TodoItem({
       document.removeEventListener('touchend', onEnd)
       document.removeEventListener('touchcancel', onEnd)
 
-      const t = ev.changedTouches?.[0]
-      const el = t
-        ? document.elementFromPoint(t.clientX, t.clientY)
+      const point = ev.changedTouches?.[0]
+      const el = point
+        ? document.elementFromPoint(point.clientX, point.clientY)
         : null
       const overTodo = el?.closest('[data-todo-drop]')
       const overCal = el?.closest('[data-cal-drop]')
@@ -202,105 +219,106 @@ export function TodoItem({
         if (id) onReorder?.(id, todo.id)
       }}
       className={[
-        'group ui-inset transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.03)] dark:bg-zinc-950/60 dark:hover:shadow-sm',
-        '[&.touch-drag-over]:border-[var(--accent-color)] [&.touch-drag-over]:ring-1 [&.touch-drag-over]:ring-[var(--accent-glow)]',
-        dragOver
-          ? 'border-[var(--accent-color)] ring-1 ring-[var(--accent-glow)]'
-          : '',
+        'group todo-row',
+        dragOver ? 'is-drag-over' : '',
         dragging ? 'opacity-50' : '',
-        removing ? 'animate-removing' : 'animate-fade-in',
+        removing ? 'animate-removing' : 'animate-todo-enter',
       ].join(' ')}
     >
-      <div className="flex items-start gap-1 p-3.5">
-        <button
-          type="button"
-          draggable={false}
-          aria-label={t('todo.drag')}
-          title={t('todo.drag')}
-          className="touch-target mt-0 flex shrink-0 cursor-grab active:cursor-grabbing items-center justify-center text-muted/70 dark:text-zinc-400 hover:text-ink-soft dark:hover:text-zinc-200 active:text-ink-soft"
-          onMouseDown={(e) => e.stopPropagation()}
-          onTouchStart={handleGripTouchStart}
-        >
-          <GripVertical size={18} strokeWidth={1.75} />
-        </button>
+      <div className="space-y-1.5 py-3.5 px-1 sm:px-1.5">
+        {/* Строка задачи: текст по центру с чекбоксом */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            draggable={false}
+            aria-label={t('todo.drag')}
+            title={t('todo.drag')}
+            className="touch-target flex h-11 w-11 shrink-0 cursor-grab active:cursor-grabbing items-center justify-center text-muted dark:text-zinc-400 hover:text-ink-soft dark:hover:text-zinc-200 active:text-ink-soft"
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={handleGripTouchStart}
+          >
+            <GripVertical size={20} strokeWidth={1.75} />
+          </button>
 
-        <button
-          type="button"
-          onClick={() => onToggle(todo.id)}
-          aria-label={todo.completed ? t('todo.uncomplete') : t('todo.complete')}
-          className={[
-            'todo-check touch-target mt-0 flex shrink-0 cursor-pointer items-center justify-center rounded-full transition-all duration-200',
-            todo.completed
-              ? 'text-[var(--accent-contrast)]'
-              : 'text-transparent',
-          ].join(' ')}
-        >
-          <span
+          <button
+            type="button"
+            onClick={() => onToggle(todo.id)}
+            aria-label={
+              todo.completed ? t('todo.uncomplete') : t('todo.complete')
+            }
             className={[
-              'flex h-6 w-6 items-center justify-center rounded-full border transition-all duration-200',
+              'todo-check touch-target flex shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200',
               todo.completed
-                ? 'bg-[var(--accent-color)] border-[var(--accent-color)] shadow-[0_0_0_3px_var(--accent-glow)]'
-                : 'border-black/15 dark:border-[var(--border-color)] hover:border-[var(--accent-color)] active:border-[var(--accent-color)]',
+                ? 'text-[var(--accent-contrast)]'
+                : 'text-transparent',
+              justCompleted ? 'animate-todo-complete' : '',
             ].join(' ')}
           >
-            {todo.completed ? (
-              <Check size={14} strokeWidth={2.5} />
-            ) : (
-              <Circle size={14} strokeWidth={1.5} className="opacity-0" />
-            )}
-          </span>
-        </button>
+            <span
+              className={[
+                'flex h-6 w-6 items-center justify-center rounded-full border transition-colors duration-200',
+                todo.completed
+                  ? 'bg-[var(--accent-color)] border-[var(--accent-color)] text-[var(--accent-contrast)]'
+                  : 'border-black/20 dark:border-[var(--border-color)] hover:border-[var(--accent-color)] active:border-[var(--accent-color)]',
+              ].join(' ')}
+            >
+              {todo.completed ? (
+                <Check size={14} strokeWidth={2.5} />
+              ) : (
+                <Circle size={14} strokeWidth={1.5} className="opacity-0" />
+              )}
+            </span>
+          </button>
 
-        <div className="min-w-0 flex-1">
-          {editing ? (
-            <div className="space-y-2.5">
-              <input
-                ref={editInputRef}
-                type="text"
-                value={draftText}
-                onChange={(e) =>
-                  setDraftText(e.target.value.slice(0, MAX_TODO_TEXT_LENGTH))
-                }
-                maxLength={MAX_TODO_TEXT_LENGTH}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    saveEdit()
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault()
-                    cancelEdit()
+          <div className="min-w-0 flex-1">
+            {editing ? (
+              <div className="space-y-2.5">
+                <input
+                  ref={editInputRef}
+                  type="text"
+                  value={draftText}
+                  onChange={(e) =>
+                    setDraftText(e.target.value.slice(0, MAX_TODO_TEXT_LENGTH))
                   }
-                }}
-                className="w-full rounded-xl border border-black/[0.08] dark:border-[var(--border-color)] bg-surface dark:bg-[var(--bg-card)] px-3 py-2 text-[15px] text-ink dark:text-[var(--text-main)] outline-none focus:border-[var(--accent-color)] focus:ring-2 focus:ring-[var(--accent-glow)]"
-              />
-              <MetaPicker
-                priority={draftPriority}
-                onPriorityChange={setDraftPriority}
-                t={t}
-                compact
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={saveEdit}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#2D3142] dark:bg-zinc-100 text-white dark:text-zinc-900 px-3 py-1.5 text-xs font-medium hover:opacity-90"
-                >
-                  <CheckCheck size={13} strokeWidth={2} />
-                  {t('todo.save')}
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  className="inline-flex items-center gap-1 rounded-xl border border-black/[0.08] dark:border-zinc-600 px-3 py-1.5 text-xs text-muted dark:text-zinc-300 hover:bg-canvas-warm dark:hover:bg-zinc-800"
-                >
-                  {t('todo.cancel')}
-                </button>
+                  maxLength={MAX_TODO_TEXT_LENGTH}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      saveEdit()
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      cancelEdit()
+                    }
+                  }}
+                  className="w-full rounded-xl border border-black/[0.08] dark:border-[var(--border-color)] bg-surface dark:bg-[var(--bg-card)] px-3 py-2 text-[16.05px] text-ink dark:text-[var(--text-main)] outline-none focus:border-[var(--accent-color)] focus:ring-2 focus:ring-[var(--accent-glow)]"
+                />
+                <MetaPicker
+                  priority={draftPriority}
+                  onPriorityChange={setDraftPriority}
+                  t={t}
+                  compact
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={saveEdit}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#2D3142] dark:bg-zinc-100 text-white dark:text-zinc-900 px-3 py-1.5 text-xs font-medium hover:opacity-90"
+                  >
+                    <CheckCheck size={13} strokeWidth={2} />
+                    {t('todo.save')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="inline-flex items-center gap-1 rounded-xl border border-black/[0.08] dark:border-zinc-600 px-3 py-1.5 text-xs text-muted dark:text-zinc-300 hover:bg-canvas-warm dark:hover:bg-zinc-800"
+                  >
+                    {t('todo.cancel')}
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-start gap-2">
-                <p className="flex-1 min-w-0 text-[15px] leading-snug">
+            ) : (
+              <div className="flex items-center gap-2">
+                <p className="flex-1 min-w-0 text-[16.05px] leading-snug">
                   <span
                     className={[
                       'todo-strike transition-colors',
@@ -354,14 +372,24 @@ export function TodoItem({
                     type="button"
                     onClick={handleDelete}
                     aria-label={t('todo.delete')}
-                    className="touch-target flex items-center justify-center rounded-xl hover:bg-black/[0.04] dark:hover:bg-zinc-800 active:bg-black/[0.06] dark:active:bg-zinc-800 text-muted/80 dark:text-zinc-400 hover:text-ink dark:hover:text-zinc-100"
+                    className="btn-danger-hover touch-target flex items-center justify-center rounded-xl text-muted/80 dark:text-zinc-400"
                   >
                     <Trash2 size={16} strokeWidth={1.75} />
                   </button>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
 
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        {/* Бейджи ниже — не влияют на вертикальный центр текста */}
+        {showMetaRow && (
+          <div className="pl-[5.25rem] space-y-1">
+            {(todo.habitId ||
+              priority !== 'none' ||
+              estimated > 0 ||
+              spent > 0) && (
+              <div className="flex flex-wrap items-center gap-1.5">
                 {todo.habitId && (
                   <span className="inline-flex items-center rounded-full border border-[#B8DCC8]/80 bg-[#EAF6EF] px-2 py-0.5 text-[10px] font-medium text-[#3D6B52] dark:border-emerald-700/50 dark:bg-emerald-500/10 dark:text-emerald-300">
                     {t('todo.habitBadge')}
@@ -386,20 +414,20 @@ export function TodoItem({
                   </span>
                 )}
               </div>
+            )}
 
-              {(hasSubtasks || showSubtasksHint) && (
-                <p className="mt-1 text-xs text-muted dark:text-zinc-300">
-                  {hasSubtasks
-                    ? t('todo.stepsProgress', {
-                        done: doneSubtasks,
-                        total: todo.subtasks.length,
-                      })
-                    : t('todo.splitHint')}
-                </p>
-              )}
-            </>
-          )}
-        </div>
+            {(hasSubtasks || (showSubtasksHint && expanded)) && (
+              <p className="text-xs text-muted dark:text-zinc-300">
+                {hasSubtasks
+                  ? t('todo.stepsProgress', {
+                      done: doneSubtasks,
+                      total: todo.subtasks.length,
+                    })
+                  : t('todo.splitHint')}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <div
@@ -425,9 +453,7 @@ export function TodoItem({
                   }
                   className={[
                     'todo-check touch-target flex shrink-0 items-center justify-center rounded-full transition-all',
-                    sub.completed
-                      ? 'text-[var(--accent-contrast)]'
-                      : '',
+                    sub.completed ? 'text-[var(--accent-contrast)]' : '',
                   ].join(' ')}
                 >
                   <span
@@ -457,7 +483,7 @@ export function TodoItem({
                   type="button"
                   onClick={() => onDeleteSubtask(todo.id, sub.id)}
                   aria-label={t('todo.deleteStep')}
-                  className="touch-target flex items-center justify-center rounded-xl opacity-100 sm:opacity-0 sm:group-hover/sub:opacity-100 transition-opacity text-muted hover:text-ink dark:hover:text-zinc-100 active:bg-black/[0.04] dark:active:bg-zinc-800"
+                  className="btn-danger-hover touch-target flex items-center justify-center rounded-xl opacity-100 sm:opacity-0 sm:group-hover/sub:opacity-100 transition-opacity text-muted"
                 >
                   <X size={15} />
                 </button>

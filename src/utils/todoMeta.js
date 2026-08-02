@@ -13,18 +13,18 @@ export const PRIORITY_ORDER = {
 }
 
 export const PRIORITY_STYLES = {
-  none: 'border-black/10 text-muted dark:border-zinc-700 dark:text-zinc-300',
-  low: 'border-sky-200/80 bg-sky-50 text-sky-800 dark:border-sky-400/50 dark:bg-sky-500/10 dark:text-sky-300',
+  none: 'border-[var(--border-color)] text-muted dark:border-zinc-600 dark:text-zinc-300',
+  low: 'border-sky-600/40 bg-sky-500/14 text-sky-900 dark:border-sky-400/40 dark:bg-sky-400/15 dark:text-sky-300',
   medium:
-    'border-amber-200/80 bg-amber-50 text-amber-900 dark:border-amber-400/50 dark:bg-amber-500/10 dark:text-amber-300',
-  high: 'border-rose-200/80 bg-rose-50 text-rose-800 dark:border-rose-400/50 dark:bg-rose-500/10 dark:text-rose-300',
+    'border-amber-600/45 bg-amber-500/14 text-amber-950 dark:border-amber-400/40 dark:bg-amber-400/15 dark:text-amber-300',
+  high: 'border-rose-600/45 bg-rose-500/14 text-rose-900 dark:border-rose-400/40 dark:bg-rose-400/15 dark:text-rose-300',
 }
 
 export const PRIORITY_DOT = {
   none: 'bg-black/20 dark:bg-zinc-500',
-  low: 'bg-sky-400',
-  medium: 'bg-amber-400',
-  high: 'bg-rose-400',
+  low: 'bg-sky-500 dark:bg-sky-400',
+  medium: 'bg-amber-500 dark:bg-amber-400',
+  high: 'bg-rose-500 dark:bg-rose-400',
 }
 
 export function normalizePriority(value) {

@@ -1,11 +1,8 @@
 import { useCallback, useState } from 'react'
-import { Moon, Sun } from 'lucide-react'
 import { LoginForm } from './LoginForm'
 import { SignUpForm } from './SignUpForm'
 import { RecoveryPasswordForm } from './RecoveryPasswordForm'
 import { useLocale } from '../../i18n/LocaleContext'
-import { useTheme } from '../../hooks/useTheme'
-import { ThemeCustomizer } from '../ThemeCustomizer'
 
 /**
  * Экран входа/регистрации / сброса пароля.
@@ -19,15 +16,6 @@ export function AuthScreen({
   clearRecoveryMode,
 }) {
   const { locale, t, toggleLocale } = useLocale()
-  const {
-    isDark,
-    toggleTheme,
-    bgTheme,
-    setBgTheme,
-    accent,
-    setAccent,
-  } = useTheme()
-  const nextLocale = locale === 'ru' ? 'EN' : 'RU'
   const [mode, setMode] = useState('login')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -107,83 +95,81 @@ export function AuthScreen({
   }
 
   return (
-    <div className="app-header min-h-screen flex items-center justify-center px-4 py-8 sm:py-12">
-      <div className="w-full max-w-md">
-        <div className="relative z-40 flex justify-end gap-2 mb-3">
-          <button
-            type="button"
-            onClick={toggleLocale}
-            aria-label={
-              locale === 'ru' ? t('header.langToEn') : t('header.langToRu')
-            }
-            title={locale === 'ru' ? t('header.langToEn') : t('header.langToRu')}
-            className="ui-chip touch-target flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-xl px-2.5 font-customMono text-[11px] font-bold tracking-wide text-ink-soft dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200 transition-colors hover:bg-canvas-warm dark:hover:bg-zinc-800 active:bg-canvas-warm dark:active:bg-zinc-800"
-          >
-            {nextLocale}
-          </button>
-
-          <ThemeCustomizer
-            bgTheme={bgTheme}
-            accent={accent}
-            isDark={isDark}
-            onBgThemeChange={setBgTheme}
-            onAccentChange={setAccent}
-          />
-
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={
-              isDark ? t('header.themeToLight') : t('header.themeToDark')
-            }
-            className="ui-chip touch-target flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-ink-soft dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-200 transition-colors hover:bg-canvas-warm dark:hover:bg-zinc-800 active:bg-canvas-warm dark:active:bg-zinc-800"
-          >
-            {isDark ? (
-              <Sun size={18} strokeWidth={1.75} />
-            ) : (
-              <Moon size={18} strokeWidth={1.75} />
-            )}
-          </button>
-        </div>
-
-        <div className="ui-card p-6 sm:p-8 space-y-6">
-          <div>
-            <p className="font-display text-xs tracking-[0.2em] uppercase text-muted dark:text-zinc-400 mb-1">
+    <div className="auth-stage app-header min-h-screen flex items-center justify-center px-4 py-10 sm:py-14">
+      <div className="w-full max-w-md animate-slide-up">
+        <div className="mb-8 w-full text-left">
+          <div className="relative mb-3 flex min-h-11 items-center">
+            <p className="font-display text-xs tracking-[0.22em] uppercase text-muted pr-20">
               {t('header.tagline')}
             </p>
-            <h1
-              className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-display text-3xl font-semibold tracking-tight leading-none text-ink dark:text-zinc-50"
-              aria-label={t('header.titleTodo')}
+            <button
+              type="button"
+              onClick={toggleLocale}
+              aria-label={
+                locale === 'ru' ? t('header.langToEn') : t('header.langToRu')
+              }
+              title={
+                locale === 'ru' ? t('header.langToEn') : t('header.langToRu')
+              }
+              className="touch-target absolute right-0 top-1/2 z-40 flex h-11 min-w-[4.5rem] -translate-y-1/2 cursor-pointer items-center justify-end gap-1 rounded-xl px-1 font-customMono text-[11px] font-bold tracking-wide text-muted transition-colors hover:text-ink-soft active:bg-[var(--bg-warm)]/60"
             >
-              <span>{t('header.titleTodo')}</span>
-              <img
-                src="/logo-mark.png"
-                alt=""
-                width={42}
-                height={42}
-                className="h-[1.09em] w-[1.09em] shrink-0 object-contain dark:hidden"
-                draggable={false}
-              />
-              <img
-                src="/logo-mark-dark.png"
-                alt=""
-                width={42}
-                height={42}
-                className="hidden h-[1.09em] w-[1.09em] shrink-0 object-contain dark:block"
-                draggable={false}
-              />
-            </h1>
-            <p className="mt-2 text-sm text-muted dark:text-zinc-400">
-              {recoveryMode
-                ? t('auth.recoveryHint')
-                : mode === 'login'
-                  ? t('auth.loginHint')
-                  : t('auth.signUpHint')}
-            </p>
+              <span
+                className={
+                  locale === 'ru'
+                    ? 'text-ink dark:text-zinc-100'
+                    : 'opacity-45'
+                }
+              >
+                RU
+              </span>
+              <span className="opacity-30" aria-hidden>
+                /
+              </span>
+              <span
+                className={
+                  locale === 'en'
+                    ? 'text-ink dark:text-zinc-100'
+                    : 'opacity-45'
+                }
+              >
+                EN
+              </span>
+            </button>
           </div>
+          <h1
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 font-display text-4xl sm:text-5xl font-semibold tracking-tight leading-none text-ink dark:text-zinc-50"
+            aria-label={t('header.titleTodo')}
+          >
+            <span>{t('header.titleTodo')}</span>
+            <img
+              src="/logo-mark.png"
+              alt=""
+              width={56}
+              height={56}
+              className="h-[1.15em] w-[1.15em] shrink-0 object-contain dark:hidden"
+              draggable={false}
+            />
+            <img
+              src="/logo-mark-dark.png"
+              alt=""
+              width={56}
+              height={56}
+              className="hidden h-[1.15em] w-[1.15em] shrink-0 object-contain dark:block"
+              draggable={false}
+            />
+          </h1>
+          <p className="mt-3 text-sm text-muted max-w-sm">
+            {recoveryMode
+              ? t('auth.recoveryHint')
+              : mode === 'login'
+                ? t('auth.loginHint')
+                : t('auth.signUpHint')}
+          </p>
+        </div>
 
+        <div className="space-y-5">
           {!recoveryMode && (
-            <div className="flex rounded-xl border border-black/[0.06] dark:border-zinc-700 p-1 bg-canvas-warm/60 dark:bg-zinc-950/60">
+            <div className="flex rounded-xl border border-[var(--border-color)] p-1 bg-[color-mix(in_srgb,var(--bg-warm)_70%,transparent)]">
               <button
                 type="button"
                 onClick={() => {
@@ -192,10 +178,10 @@ export function AuthScreen({
                   setInfo(null)
                 }}
                 className={[
-                  'flex-1 rounded-lg py-2 text-sm font-medium transition-colors',
+                  'flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors',
                   mode === 'login'
-                    ? 'bg-surface dark:bg-zinc-800 text-ink dark:text-zinc-50 shadow-sm'
-                    : 'text-muted dark:text-zinc-400',
+                    ? 'bg-[var(--bg-card)] text-ink dark:bg-zinc-800 dark:text-zinc-50'
+                    : 'text-muted',
                 ].join(' ')}
               >
                 {t('auth.tabLogin')}
@@ -208,10 +194,10 @@ export function AuthScreen({
                   setInfo(null)
                 }}
                 className={[
-                  'flex-1 rounded-lg py-2 text-sm font-medium transition-colors',
+                  'flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors',
                   mode === 'signup'
-                    ? 'bg-surface dark:bg-zinc-800 text-ink dark:text-zinc-50 shadow-sm'
-                    : 'text-muted dark:text-zinc-400',
+                    ? 'bg-[var(--bg-card)] text-ink dark:bg-zinc-800 dark:text-zinc-50'
+                    : 'text-muted',
                 ].join(' ')}
               >
                 {t('auth.tabSignUp')}

@@ -13,7 +13,7 @@ export function MetaChip({ id, label, selected, onSelect, compact = false }) {
         compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]',
         selected
           ? PRIORITY_STYLES[id]
-          : 'border-black/10 dark:border-zinc-700/80 text-muted dark:text-zinc-400 hover:border-black/15 dark:hover:border-zinc-600 hover:text-ink-soft dark:hover:text-zinc-200',
+          : 'border-[var(--border-color)] text-muted dark:text-zinc-300 hover:border-[color-mix(in_srgb,var(--text-main)_22%,var(--border-color))] hover:text-ink-soft dark:hover:text-zinc-200',
         onSelect ? 'cursor-pointer' : 'cursor-default',
       ].join(' ')}
     >
@@ -48,20 +48,24 @@ export function MetaBadge({ id, label }) {
 }
 
 export function MetaPicker({ priority, onPriorityChange, t, compact = false }) {
+  const options = PRIORITIES.filter((item) => item.id !== 'none')
+
+  const handleSelect = (id) => {
+    onPriorityChange?.(priority === id ? 'none' : id)
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[10px] uppercase tracking-[0.14em] text-muted dark:text-zinc-400 mr-0.5">
+      <span className="text-[10px] uppercase tracking-[0.14em] text-muted dark:text-zinc-300 mr-0.5">
         {t('meta.priority')}
       </span>
-      {PRIORITIES.map((item) => (
+      {options.map((item) => (
         <MetaChip
           key={item.id}
           id={item.id}
-          label={
-            item.id === 'none' ? t('meta.none') : t(`meta.priority.${item.id}`)
-          }
+          label={t(`meta.priority.${item.id}`)}
           selected={priority === item.id}
-          onSelect={onPriorityChange}
+          onSelect={handleSelect}
           compact={compact}
         />
       ))}

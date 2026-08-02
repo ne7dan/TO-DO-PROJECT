@@ -8,7 +8,7 @@ import { useTheme } from './hooks/useTheme'
 import { useTodos } from './hooks/useTodos'
 import { useHabits } from './hooks/useHabits'
 import { useLocale } from './i18n/LocaleContext'
-import { toDateKey } from './utils/dates'
+import { toDateKey, shiftWeek, shiftMonthKey, shiftYearKey, addDays } from './utils/dates'
 import { celebrateDayComplete } from './utils/celebrate'
 
 const Pomodoro = lazy(() =>
@@ -24,6 +24,7 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
   const {
     isDark,
     toggleTheme,
+    setThemeMode,
     bgTheme,
     setBgTheme,
     accent,
@@ -68,15 +69,25 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
 
   const [activePeriod, setActivePeriod] = useState('day')
   const [selectedDate, setSelectedDate] = useState(() => toDateKey())
+  const [selectedWeekDate, setSelectedWeekDate] = useState(() => toDateKey())
+  const [selectedMonthDate, setSelectedMonthDate] = useState(() => toDateKey())
+  const [selectedYearDate, setSelectedYearDate] = useState(() => toDateKey())
   const [focusTask, setFocusTask] = useState(null)
 
+  const periodDateKey =
+    activePeriod === 'day'
+      ? selectedDate
+      : activePeriod === 'week'
+        ? selectedWeekDate
+        : activePeriod === 'month'
+          ? selectedMonthDate
+          : activePeriod === 'year'
+            ? selectedYearDate
+            : undefined
+
   const todos = useMemo(
-    () =>
-      getTodosByPeriod(
-        activePeriod,
-        activePeriod === 'day' ? selectedDate : undefined,
-      ),
-    [getTodosByPeriod, activePeriod, selectedDate],
+    () => getTodosByPeriod(activePeriod, periodDateKey),
+    [getTodosByPeriod, activePeriod, periodDateKey],
   )
 
   const focusOptions = useMemo(() => {
@@ -121,8 +132,37 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
     setActivePeriod('day')
   }
 
-  const handleProgress = (periodId) =>
-    getProgress(periodId, periodId === 'day' ? selectedDate : undefined)
+  const handleProgress = (periodId) => {
+    const key =
+      periodId === 'day'
+        ? selectedDate
+        : periodId === 'week'
+          ? selectedWeekDate
+          : periodId === 'month'
+            ? selectedMonthDate
+            : periodId === 'year'
+              ? selectedYearDate
+              : undefined
+    return getProgress(periodId, key)
+  }
+
+  const handleShiftPeriod = (delta) => {
+    if (activePeriod === 'day') {
+      setSelectedDate((prev) => addDays(prev, delta))
+      return
+    }
+    if (activePeriod === 'week') {
+      setSelectedWeekDate((prev) => shiftWeek(prev, delta))
+      return
+    }
+    if (activePeriod === 'month') {
+      setSelectedMonthDate((prev) => shiftMonthKey(prev, delta))
+      return
+    }
+    if (activePeriod === 'year') {
+      setSelectedYearDate((prev) => shiftYearKey(prev, delta))
+    }
+  }
 
   const handleDropOnCalendar = (todoId, dateKey, { copy = false } = {}) => {
     if (copy) void copyTodoToDate(todoId, dateKey)
@@ -199,6 +239,7 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
         <Header
           isDark={isDark}
           onToggleTheme={toggleTheme}
+          onModeChange={setThemeMode}
           bgTheme={bgTheme}
           accent={accent}
           onBgThemeChange={setBgTheme}
@@ -237,6 +278,8 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
                 period={activePeriod}
                 todos={todos}
                 selectedDate={selectedDate}
+                periodAnchorDate={periodDateKey}
+                onShiftPeriod={handleShiftPeriod}
                 onAdd={addTodo}
                 onUpdate={updateTodo}
                 onToggle={handleToggleTodo}
@@ -254,6 +297,9 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
                   periodCounts={periodCounts}
                   streak={streak}
                   selectedDate={selectedDate}
+                  selectedWeekDate={selectedWeekDate}
+                  selectedMonthDate={selectedMonthDate}
+                  selectedYearDate={selectedYearDate}
                 />
               </Suspense>
 

@@ -116,8 +116,8 @@ export function HabitTracker({
                     className={[
                       'flex h-6 w-6 items-center justify-center rounded-full border transition-all',
                       done
-                        ? 'bg-[var(--accent-color)] border-[var(--accent-color)] shadow-[0_0_0_3px_var(--accent-glow)]'
-                        : 'border-black/15 dark:border-[var(--border-color)] hover:border-[var(--accent-color)] active:border-[var(--accent-color)]',
+                        ? 'bg-[var(--accent-color)] border-[var(--accent-color)]'
+                        : 'border-black/20 dark:border-[var(--border-color)] hover:border-[var(--accent-color)] active:border-[var(--accent-color)]',
                     ].join(' ')}
                   >
                     {done && <Check size={14} strokeWidth={2.5} />}
@@ -137,7 +137,7 @@ export function HabitTracker({
                   type="button"
                   onClick={() => onDelete(habit.id)}
                   aria-label={t('habits.delete')}
-                  className="touch-target flex items-center justify-center rounded-xl text-muted hover:text-ink dark:hover:text-zinc-100 hover:bg-black/[0.04] dark:hover:bg-zinc-800 active:bg-black/[0.06] dark:active:bg-zinc-800"
+                  className="btn-danger-hover touch-target flex items-center justify-center rounded-xl text-muted"
                 >
                   <Trash2 size={16} strokeWidth={1.75} />
                 </button>

@@ -6,7 +6,10 @@ import {
   buildDayStatuses,
   calculateStreak,
   countFreezesInMonth,
+  getWeekEnd,
+  getWeekStart,
   MAX_FREEZES_PER_MONTH,
+  parseDateKey,
   pruneInvalidFreezes,
   toDateKey,
   toMonthKey,
@@ -375,7 +378,7 @@ export function useTodos(userId) {
         text: safeText,
         completed: false,
         period,
-        date: period === 'day' ? dateKey : toDateKey(),
+        date: dateKey || toDateKey(),
         subtasks: [],
         priority: normalizePriority(meta.priority),
         estimatedMinutes: normalizeEstimateMinutes(meta.estimatedMinutes),
@@ -843,6 +846,18 @@ export function useTodos(userId) {
         .filter((t) => {
           if (t.period !== period) return false
           if (period === 'day') return t.date === dateKey
+          if (!t.date) return false
+          if (period === 'week') {
+            const startKey = toDateKey(getWeekStart(parseDateKey(dateKey)))
+            const endKey = toDateKey(getWeekEnd(parseDateKey(dateKey)))
+            return t.date >= startKey && t.date <= endKey
+          }
+          if (period === 'month') {
+            return toMonthKey(t.date) === toMonthKey(dateKey)
+          }
+          if (period === 'year') {
+            return t.date.slice(0, 4) === String(dateKey).slice(0, 4)
+          }
           return true
         })
         .sort((a, b) => {

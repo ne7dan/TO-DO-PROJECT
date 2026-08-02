@@ -28,6 +28,92 @@ export function formatDayMeta(dateKey, localeTag = 'ru-RU') {
   }
 }
 
+/** Понедельник текущей недели (календарь с Пн). */
+export function getWeekStart(date = new Date()) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const offset = (d.getDay() + 6) % 7
+  d.setDate(d.getDate() - offset)
+  return d
+}
+
+/** Воскресенье текущей недели. */
+export function getWeekEnd(date = new Date()) {
+  const start = getWeekStart(date)
+  const end = new Date(start)
+  end.setDate(start.getDate() + 6)
+  return end
+}
+
+/** Сдвиг на N недель; возвращает dateKey понедельника. */
+export function shiftWeek(dateKey, deltaWeeks) {
+  const start = getWeekStart(parseDateKey(dateKey))
+  start.setDate(start.getDate() + deltaWeeks * 7)
+  return toDateKey(start)
+}
+
+/** Сдвиг на N месяцев; возвращает 1-е число месяца. */
+export function shiftMonthKey(dateKey, deltaMonths) {
+  const d = parseDateKey(dateKey)
+  return toDateKey(new Date(d.getFullYear(), d.getMonth() + deltaMonths, 1))
+}
+
+/** Сдвиг на N лет; возвращает 1 января. */
+export function shiftYearKey(dateKey, deltaYears) {
+  const d = parseDateKey(dateKey)
+  return toDateKey(new Date(d.getFullYear() + deltaYears, 0, 1))
+}
+
+function formatDayMonth(date, localeTag) {
+  return date.toLocaleDateString(localeTag, {
+    day: 'numeric',
+    month: 'long',
+  })
+}
+
+/**
+ * Подпись дедлайна периода:
+ * week  → «27 июля — 2 августа»
+ * month → «август»
+ * year  → «2026»
+ */
+export function formatPeriodDeadline(
+  period,
+  localeTag = 'ru-RU',
+  date = new Date(),
+) {
+  if (period === 'week') {
+    const start = getWeekStart(date)
+    const end = getWeekEnd(date)
+    const startLabel = formatDayMonth(start, localeTag)
+    const endLabel = formatDayMonth(end, localeTag)
+
+    if (
+      start.getMonth() === end.getMonth() &&
+      start.getFullYear() === end.getFullYear()
+    ) {
+      const month = start.toLocaleDateString(localeTag, { month: 'long' })
+      return `${start.getDate()}–${end.getDate()} ${month}`
+    }
+
+    return `${startLabel} — ${endLabel}`
+  }
+
+  if (period === 'month') {
+    const label = date.toLocaleDateString(localeTag, { month: 'long' })
+    const nowYear = new Date().getFullYear()
+    if (date.getFullYear() !== nowYear) {
+      return `${label} ${date.getFullYear()}`
+    }
+    return label
+  }
+
+  if (period === 'year') {
+    return String(date.getFullYear())
+  }
+
+  return ''
+}
+
 export function shiftMonth(year, month, delta) {
   const date = new Date(year, month + delta, 1)
   return { year: date.getFullYear(), month: date.getMonth() }

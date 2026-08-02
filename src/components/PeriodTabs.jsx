@@ -11,7 +11,7 @@ function LiveDot({ inverted, label }) {
       <span className="absolute inline-flex h-full w-full rounded-full bg-rose-400/80 opacity-75 animate-live-ping" />
       <span
         className={[
-          'relative inline-flex h-1.5 w-1.5 rounded-full bg-rose-400 shadow-[0_0_6px_1.5px_rgba(251,113,133,0.35)]',
+          'relative inline-flex h-1.5 w-1.5 rounded-full bg-rose-500',
           inverted ? 'ring-1 ring-white/80 dark:ring-zinc-900/40' : '',
         ].join(' ')}
       />
@@ -49,10 +49,10 @@ export function PeriodTabs({
             className={[
               'relative rounded-xl px-3 py-3 pr-6 text-left transition-all duration-200 border',
               isActive
-                ? 'bg-[var(--accent-soft)] text-[var(--text-main)] border-[color-mix(in_srgb,var(--accent-color)_55%,var(--border-color))] shadow-[0_4px_12px_var(--accent-glow)] opacity-100'
+                ? 'bg-[var(--accent-soft)] text-[var(--text-main)] border-[color-mix(in_srgb,var(--accent-color)_55%,var(--border-color))] opacity-100'
                 : isDimmed
-                  ? 'bg-surface/70 dark:bg-[color-mix(in_srgb,var(--bg-card)_40%,transparent)] border-black/[0.04] dark:border-[var(--border-color)] text-muted/70 dark:text-[var(--text-muted)] opacity-55 hover:opacity-80'
-                  : 'ui-card text-muted opacity-100 hover:border-[color-mix(in_srgb,var(--accent-color)_35%,var(--border-color))]',
+                  ? 'bg-transparent border-[var(--border-color)] text-muted opacity-60 hover:opacity-85'
+                  : 'bg-transparent border-[var(--border-color)] text-muted hover:border-[color-mix(in_srgb,var(--accent-color)_40%,var(--border-color))] hover:bg-[var(--accent-soft)]/40',
             ].join(' ')}
           >
             {isLive && (

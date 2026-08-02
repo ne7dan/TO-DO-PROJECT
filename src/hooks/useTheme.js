@@ -44,6 +44,13 @@ export function useTheme() {
     setMode((prev) => (normalizeMode(prev) === 'dark' ? 'light' : 'dark'))
   }, [setMode])
 
+  const setThemeMode = useCallback(
+    (next) => {
+      setMode(normalizeMode(next))
+    },
+    [setMode],
+  )
+
   const setBgTheme = useCallback(
     (next) => {
       setBgThemeRaw(normalizeBgTheme(next))
@@ -61,6 +68,7 @@ export function useTheme() {
   return {
     theme: safeMode,
     toggleTheme,
+    setThemeMode,
     isDark: safeMode === 'dark',
     bgTheme: safeBgTheme,
     setBgTheme,

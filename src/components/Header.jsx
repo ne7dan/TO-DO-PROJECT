@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { LogOut, Moon, Sun, User } from 'lucide-react'
+import { LogOut, User } from 'lucide-react'
 import { useLocale } from '../i18n/LocaleContext'
 import { ProfileModal } from './ProfileModal'
-import { ThemeCustomizer } from './ThemeCustomizer'
 
 export function Header({
   isDark,
   onToggleTheme,
+  onModeChange,
   bgTheme,
   accent,
   onBgThemeChange,
@@ -16,8 +16,7 @@ export function Header({
   onSignOut,
   onRequestPasswordReset,
 }) {
-  const { locale, t, toggleLocale } = useLocale()
-  const nextLocale = locale === 'ru' ? 'EN' : 'RU'
+  const { t } = useLocale()
   const [profileOpen, setProfileOpen] = useState(false)
 
   const nickname = user?.user_metadata?.nickname
@@ -60,41 +59,6 @@ export function Header({
         </div>
 
         <div className="flex items-center gap-2 shrink-0 mt-1">
-          <button
-            type="button"
-            onClick={toggleLocale}
-            aria-label={
-              locale === 'ru' ? t('header.langToEn') : t('header.langToRu')
-            }
-            title={locale === 'ru' ? t('header.langToEn') : t('header.langToRu')}
-            className="ui-chip touch-target flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-xl px-2.5 font-customMono text-[11px] font-bold tracking-wide text-ink-soft transition-colors hover:bg-[var(--bg-warm)] active:bg-[var(--bg-warm)]"
-          >
-            {nextLocale}
-          </button>
-
-          <ThemeCustomizer
-            bgTheme={bgTheme}
-            accent={accent}
-            isDark={isDark}
-            onBgThemeChange={onBgThemeChange}
-            onAccentChange={onAccentChange}
-          />
-
-          <button
-            type="button"
-            onClick={onToggleTheme}
-            aria-label={
-              isDark ? t('header.themeToLight') : t('header.themeToDark')
-            }
-            className="ui-chip touch-target flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-[var(--bg-warm)] active:bg-[var(--bg-warm)]"
-          >
-            {isDark ? (
-              <Sun size={18} strokeWidth={1.75} />
-            ) : (
-              <Moon size={18} strokeWidth={1.75} />
-            )}
-          </button>
-
           {user && (
             <button
               type="button"
@@ -113,7 +77,7 @@ export function Header({
               onClick={() => void onSignOut()}
               aria-label={t('auth.signOut')}
               title={t('auth.signOut')}
-              className="ui-chip touch-target flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-[var(--bg-warm)] active:bg-[var(--bg-warm)]"
+              className="ui-chip btn-danger-hover touch-target flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-ink-soft"
             >
               <LogOut size={18} strokeWidth={1.75} />
             </button>
@@ -126,6 +90,13 @@ export function Header({
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
         onRequestPasswordReset={onRequestPasswordReset}
+        isDark={isDark}
+        onToggleTheme={onToggleTheme}
+        onModeChange={onModeChange}
+        bgTheme={bgTheme}
+        accent={accent}
+        onBgThemeChange={onBgThemeChange}
+        onAccentChange={onAccentChange}
       />
     </>
   )

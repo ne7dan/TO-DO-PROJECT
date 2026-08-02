@@ -379,7 +379,7 @@ function SettingsPanel({
         <button
           type="button"
           onClick={onClose}
-          className="p-1 rounded-md text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800"
+          className="btn-danger-hover p-1 rounded-md text-zinc-400"
           aria-label={t('pomodoro.settingsClose')}
         >
           <X size={12} />
@@ -1090,7 +1090,7 @@ export function Pomodoro({
               type="button"
               onClick={() => setCollapsed(true)}
               aria-label={t('pomodoro.collapse')}
-              className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
+              className="btn-danger-hover p-1.5 rounded-md text-zinc-500"
             >
               <X size={14} />
             </button>

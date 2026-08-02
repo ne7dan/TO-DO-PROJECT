@@ -31,6 +31,20 @@ export const BG_THEMES = [
     metaColorDark: '#1a231f',
     metaColorLight: '#d5e0db',
   },
+  {
+    id: 'ember-slate',
+    swatchDark: '#1a1412',
+    swatchLight: '#ebe4dc',
+    metaColorDark: '#1a1412',
+    metaColorLight: '#ebe4dc',
+  },
+  {
+    id: 'clay-bloom',
+    swatchDark: '#2a1816',
+    swatchLight: '#f5e4d8',
+    metaColorDark: '#2a1816',
+    metaColorLight: '#f5e4d8',
+  },
 ]
 
 /** Акцентные цвета (кнопки, чекбоксы, таймер, активные даты). */
@@ -60,6 +74,7 @@ const ACCENT_IDS = new Set(ACCENTS.map((a) => a.id))
 const THEME_ALIASES = {
   'matcha-dark': 'matcha-sage',
   'sage-light': 'matcha-sage',
+  'mist-indigo': 'clay-bloom',
 }
 
 export function normalizeBgTheme(value) {

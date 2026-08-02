@@ -106,15 +106,15 @@ export function Calendar({
         <div className="flex items-center gap-1.5 shrink-0">
           {streak >= 1 && (
             <div
-              className="flex items-center gap-1 rounded-xl border border-[color-mix(in_srgb,var(--accent-color)_45%,var(--border-color))] bg-[var(--accent-soft)] px-2 py-1.5"
+              className="flex items-center gap-1 rounded-xl border border-sky-400/50 bg-sky-500/12 px-2 py-1.5 dark:border-sky-400/40 dark:bg-sky-500/15"
               title={t('calendar.freezeTitle', { n: freezesLeft })}
             >
               <Snowflake
                 size={13}
                 strokeWidth={1.75}
-                className="text-[var(--accent-hover)]"
+                className="text-sky-600 dark:text-sky-400"
               />
-              <p className="text-xs font-semibold tabular-nums text-[var(--accent-hover)] leading-none">
+              <p className="text-xs font-semibold tabular-nums text-sky-700 dark:text-sky-300 leading-none">
                 {freezesLeft}
               </p>
             </div>
@@ -221,15 +221,15 @@ export function Calendar({
                 'active:opacity-80',
                 status
                   ? STATUS_STYLES[status]
-                  : 'bg-canvas-warm text-muted hover:bg-[var(--accent-soft)] active:bg-[var(--accent-soft)] dark:bg-[color-mix(in_srgb,var(--bg-warm)_80%,transparent)] dark:text-[var(--text-muted)] dark:hover:bg-[var(--accent-soft)] dark:active:bg-[var(--accent-soft)]',
+                  : 'bg-canvas-warm text-ink-soft hover:bg-[var(--accent-soft)] active:bg-[var(--accent-soft)] dark:bg-[color-mix(in_srgb,var(--bg-warm)_80%,transparent)] dark:text-[var(--text-muted)] dark:hover:bg-[var(--accent-soft)] dark:active:bg-[var(--accent-soft)]',
                 isToday && !isSelected
                   ? 'ring-1 ring-inset ring-[color-mix(in_srgb,var(--accent-color)_55%,var(--border-color))]'
                   : '',
                 isSelected
-                  ? 'ring-2 ring-inset ring-[var(--accent-color)] z-[1] shadow-[0_0_0_1px_var(--accent-glow)]'
+                  ? 'ring-2 ring-inset ring-[var(--accent-color)] z-[1]'
                   : '',
                 isDrop
-                  ? 'ring-2 ring-inset ring-[var(--accent-color)] z-[2] shadow-[0_0_0_2px_var(--accent-glow)]'
+                  ? 'ring-2 ring-inset ring-[var(--accent-color)] z-[2] bg-[var(--accent-soft)]'
                   : '',
               ].join(' ')}
             >

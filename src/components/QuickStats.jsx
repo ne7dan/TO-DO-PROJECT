@@ -8,6 +8,9 @@ export function QuickStats({
   periodCounts,
   streak,
   selectedDate,
+  selectedWeekDate,
+  selectedMonthDate,
+  selectedYearDate,
 }) {
   const { t } = useLocale()
   const [selectedId, setSelectedId] = useState('day')
@@ -46,7 +49,15 @@ export function QuickStats({
   const period = PERIODS.find((p) => p.id === selectedId) ?? PERIODS[0]
   const todos = getTodosByPeriod(
     period.id,
-    period.id === 'day' ? selectedDate : undefined,
+    period.id === 'day'
+      ? selectedDate
+      : period.id === 'week'
+        ? selectedWeekDate
+        : period.id === 'month'
+          ? selectedMonthDate
+          : period.id === 'year'
+            ? selectedYearDate
+            : undefined,
   )
   const total = todos.length
   const done = todos.filter((todo) => todo.completed).length
