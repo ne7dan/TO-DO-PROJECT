@@ -225,6 +225,23 @@ export function useTodos(userId) {
     }
   }, [userId])
 
+  /** Мягкое обновление списка (pull-to-refresh) — без полного reload и без сброса UI. */
+  const refreshTodos = useCallback(async () => {
+    if (!userId) return
+    const { data, error: fetchError } = await supabase
+      .from('todos')
+      .select('*')
+      .eq('user_id', userId)
+      .order('sort_order', { ascending: true })
+
+    if (fetchError) {
+      setError(fetchError.message)
+      return
+    }
+    setError(null)
+    setTodos((data ?? []).map(fromDbRow).filter(Boolean))
+  }, [userId])
+
   /** Загрузка стрика + разовый перенос из localStorage */
   useEffect(() => {
     if (!userId) {
@@ -944,6 +961,7 @@ export function useTodos(userId) {
     todos,
     loading,
     error,
+    refreshTodos,
     addTodo,
     updateTodo,
     addSpentTime,

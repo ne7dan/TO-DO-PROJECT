@@ -328,6 +328,35 @@ html[data-accent='amber'] {
       color-mix(in srgb, var(--bg-warm) 70%, transparent);
   }
 
+  /* iOS: тот же градиент на html/#root/PTR — виден в зазоре pull-to-refresh */
+  html.platform-ios,
+  html.platform-ios #root,
+  html.platform-ios .pull-to-refresh-root {
+    background-color: var(--bg-main);
+    background-image:
+      radial-gradient(
+        ellipse 95% 60% at 50% -20%,
+        var(--theme-glow-1),
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 55% 45% at 100% 100%,
+        var(--theme-glow-2),
+        transparent 52%
+      ),
+      radial-gradient(
+        ellipse 45% 35% at 0% 85%,
+        color-mix(in srgb, var(--accent-color) 10%, transparent),
+        transparent 45%
+      );
+    background-repeat: no-repeat;
+    background-size: cover;
+  }
+
+  html.platform-ios #root {
+    min-height: 100%;
+  }
+
   body::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -527,6 +556,91 @@ html[data-accent='amber'] {
     right: max(1.25rem, calc(env(safe-area-inset-right) + 0.75rem));
   }
 
+  /* —— iOS pull-to-refresh: только transform (GPU), без layout на каждый кадр —— */
+  html.platform-ios .pull-to-refresh-root {
+    position: relative;
+  }
+
+  /* Без постоянного transform — иначе position:fixed (FAB/модалки) привязываются к треку */
+  html.platform-ios .pull-to-refresh__track--settling {
+    transition: transform 0.2s ease-out;
+  }
+
+  html.platform-ios .pull-to-refresh__track--active {
+    will-change: transform;
+  }
+
+  html.platform-ios .pull-to-refresh {
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-end;
+    justify-content: center;
+    width: 100%;
+    height: 72px;
+    margin-top: -72px;
+    padding-bottom: 0.5rem;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  html.platform-ios .pull-to-refresh__spinner {
+    flex-shrink: 0;
+    opacity: 0;
+  }
+
+  html.platform-ios .pull-to-refresh__spinner--spin {
+    opacity: 1 !important;
+    animation: pull-to-refresh-spin 0.7s linear infinite;
+  }
+
+  /* iOS: запрет автозума при фокусе (нужен font-size ≥ 16px) */
+  html.platform-ios input,
+  html.platform-ios textarea,
+  html.platform-ios select {
+    font-size: 16px !important;
+  }
+
+  @keyframes pull-to-refresh-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Профиль: без gutter скроллбара, чтобы панели не съезжали вправо */
+  html.platform-ios .profile-scroll {
+    scrollbar-width: none;
+  }
+
+  html.platform-ios .profile-scroll::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  html.platform-ios .zen-scroll {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  html.platform-ios .zen-scroll::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  html.platform-ios .pomodoro-panel {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    border-radius: 1.25rem 1.25rem 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
   /* Скроллбар в стиле UI — боковая «рейка» */
   .ui-scroll {
     scrollbar-width: thin;
@@ -618,6 +732,48 @@ html[data-accent='amber'] {
   .auth-stage {
     position: relative;
     isolation: isolate;
+  }
+
+  html.platform-ios .auth-stage {
+    box-sizing: border-box;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 100dvh;
+    overflow-x: clip;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding-top: max(1rem, env(safe-area-inset-top, 0px));
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    /* Keyboard resize:none — сами добавляем inset, чтобы можно было доскроллить до пароля */
+    padding-bottom: calc(
+      max(1.5rem, env(safe-area-inset-bottom, 0px) + 0.75rem) +
+        var(--keyboard-inset, 0px)
+    );
+  }
+
+  html.platform-ios .auth-stage-scroll {
+    min-height: min-content;
+  }
+
+  html.platform-ios .auth-submit {
+    min-height: 3rem;
+    padding-block: 0.875rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  html.platform-ios .auth-form-scroll {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-inline: 3px;
+    margin-inline: -3px;
+    padding-bottom: max(2.5rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem));
+  }
+
+  html.platform-ios .auth-form-scroll::-webkit-scrollbar {
+    display: none;
   }
 
   .auth-stage::before {

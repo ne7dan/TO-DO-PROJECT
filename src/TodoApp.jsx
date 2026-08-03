@@ -10,6 +10,7 @@ import { useHabits } from './hooks/useHabits'
 import { useLocale } from './i18n/LocaleContext'
 import { toDateKey, shiftWeek, shiftMonthKey, shiftYearKey, addDays } from './utils/dates'
 import { celebrateDayComplete } from './utils/celebrate'
+import { PULL_REFRESH_EVENT } from './utils/appearance'
 
 const Pomodoro = lazy(() =>
   import('./components/Pomodoro').then((m) => ({ default: m.Pomodoro })),
@@ -34,6 +35,7 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
     todos: allTodos,
     loading: todosLoading,
     error: todosError,
+    refreshTodos,
     addTodo,
     updateTodo,
     addSpentTime,
@@ -66,6 +68,14 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
     skipHabitForDate,
     deleteHabit,
   } = useHabits(user?.id)
+
+  useEffect(() => {
+    const onPullRefresh = () => {
+      void refreshTodos()
+    }
+    window.addEventListener(PULL_REFRESH_EVENT, onPullRefresh)
+    return () => window.removeEventListener(PULL_REFRESH_EVENT, onPullRefresh)
+  }, [refreshTodos])
 
   const [activePeriod, setActivePeriod] = useState('day')
   const [selectedDate, setSelectedDate] = useState(() => toDateKey())

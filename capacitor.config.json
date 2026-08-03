@@ -6,8 +6,14 @@
     "androidScheme": "https"
   },
   "ios": {
-    "contentInset": "automatic",
+    "contentInset": "never",
     "scrollEnabled": true,
     "allowsLinkPreview": false
+  },
+  "plugins": {
+    "Keyboard": {
+      "resize": "none",
+      "resizeOnFullScreen": true
+    }
   }
 }

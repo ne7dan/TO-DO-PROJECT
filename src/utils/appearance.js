@@ -119,6 +119,30 @@ export function applyAppearance({ mode, bgTheme, accent }) {
   syncThemeColorMeta(nextMode, nextTheme)
 }
 
+/**
+ * Повторно применяет тему из localStorage (pull-to-refresh без потери градиента).
+ */
+export function reapplyStoredAppearance() {
+  const read = (key, fallback) => {
+    try {
+      const raw = localStorage.getItem(key)
+      if (raw == null) return fallback
+      return JSON.parse(raw)
+    } catch {
+      return fallback
+    }
+  }
+
+  applyAppearance({
+    mode: read(MODE_STORAGE_KEY, DEFAULT_MODE),
+    bgTheme: read(BG_THEME_STORAGE_KEY, DEFAULT_BG_THEME),
+    accent: read(ACCENT_STORAGE_KEY, DEFAULT_ACCENT),
+  })
+}
+
+/** Событие мягкого обновления данных после pull-to-refresh. */
+export const PULL_REFRESH_EVENT = 'flash-todo:pull-refresh'
+
 function syncThemeColorMeta(mode, bgTheme) {
   let meta = document.querySelector('meta[name="theme-color"][data-app-theme]')
   if (!meta) {
