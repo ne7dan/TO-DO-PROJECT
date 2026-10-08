@@ -17,6 +17,7 @@ import {
   recordLoginFailure,
 } from '../utils/loginLockout'
 import { ACCENTS, BG_THEMES } from '../utils/appearance'
+import { isNetworkError } from '../utils/authErrors'
 import { PullToRefresh } from './PullToRefresh'
 
 const fieldClass =
@@ -510,7 +511,7 @@ export function ProfileModal({
                     className="text-sm text-rose-600 dark:text-rose-400"
                     role="alert"
                   >
-                    {error}
+                    {isNetworkError(error) ? t('auth.networkError') : error}
                   </p>
                 )}
               </section>
@@ -591,7 +592,7 @@ export function ProfileModal({
                         className="text-sm text-rose-600 dark:text-rose-400"
                         role="alert"
                       >
-                        {error}
+                        {isNetworkError(error) ? t('auth.networkError') : error}
                       </p>
                     )}
                   </div>

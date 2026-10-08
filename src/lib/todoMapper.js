@@ -92,6 +92,11 @@ export function toDbPayload(todo, userId) {
     payload.user_id = userId
   }
 
+  // Тот же uuid, что в UI — иначе complete до ответа insert бьёт в несуществующий id.
+  if (todo.id) {
+    payload.id = todo.id
+  }
+
   return payload
 }
 

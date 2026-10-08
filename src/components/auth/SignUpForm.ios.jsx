@@ -14,6 +14,7 @@ import {
 } from '../../lib/nicknameAvailability'
 import { validateSignUpPassword } from '../../utils/passwordValidation'
 import { validateEmail } from '../../utils/emailValidation'
+import { mapAuthError } from '../../utils/authErrors'
 
 const fieldClass =
   'w-full box-border rounded-2xl border border-black/[0.08] dark:border-zinc-700 bg-surface dark:bg-zinc-950 px-4 py-3.5 text-left text-[16px] leading-snug text-ink dark:text-zinc-50 outline-none transition-[border-color,box-shadow] focus:border-[var(--accent-color)] focus:shadow-[0_0_0_3px_var(--accent-glow)]'
@@ -30,12 +31,6 @@ const FORBIDDEN = /[^\p{L}\p{N}_-]/u
 
 /** Задержка live-проверки ника (меньше запросов к Supabase). */
 const NICK_CHECK_DEBOUNCE_MS = 350
-
-function mapAuthError(error, t) {
-  if (!error) return null
-  if (error === 'nickname_taken') return t('auth.nicknameTaken')
-  return error
-}
 
 function nickFormatMessage(nickError, t) {
   if (nickError === 'empty') return null

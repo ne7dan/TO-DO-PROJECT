@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Check,
@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Circle,
   Focus,
-  GripVertical,
   Pencil,
   Plus,
   Trash2,
@@ -53,6 +52,7 @@ export function TodoItem({
   const editInputRef = useRef(null)
   const editMenuRef = useRef(null)
   const editButtonRef = useRef(null)
+  const frontRef = useRef(null)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
   const wasCompletedRef = useRef(todo.completed)
 
@@ -130,35 +130,8 @@ export function TodoItem({
     })
   }
 
-  const handleGripTouchStart = (e) => {
-    if (editing) return
-    const touch = e.touches[0]
-    if (!touch) return
-    touchTodoDrag.id = todo.id
-    setDragging(true)
-
-    const onMove = (ev) => {
-      if (touchTodoDrag.id !== todo.id) return
-      const point = ev.touches[0]
-      if (!point) return
-      ev.preventDefault()
-      clearTouchDragVisual()
-      const el = document.elementFromPoint(point.clientX, point.clientY)
-      const overTodo = el?.closest('[data-todo-drop]')
-      const overCal = el?.closest('[data-cal-drop]')
-      if (overTodo && overTodo.getAttribute('data-todo-drop') !== todo.id) {
-        overTodo.classList.add('touch-drag-over')
-      } else if (overCal) {
-        overCal.classList.add('touch-drag-over')
-      }
-    }
-
-    const onEnd = (ev) => {
-      document.removeEventListener('touchmove', onMove)
-      document.removeEventListener('touchend', onEnd)
-      document.removeEventListener('touchcancel', onEnd)
-
-      const point = ev.changedTouches?.[0]
+  const finishTouchDrag = useCallback(
+    (point) => {
       const el = point
         ? document.elementFromPoint(point.clientX, point.clientY)
         : null
@@ -187,12 +160,145 @@ export function TodoItem({
           )
         }
       }
+    },
+    [onReorder],
+  )
+
+  useEffect(() => {
+    const node = frontRef.current
+    if (!node || editing) return undefined
+
+    const SWIPE_MAX = 112
+    const SWIPE_COMMIT = 64
+    const LONG_PRESS_MS = 430
+    const AXIS = 12
+
+    const offset = { current: 0 }
+    const mode = { current: 'idle' }
+    const start = { x: 0, y: 0 }
+    let longPressTimer = 0
+
+    const setOffset = (px, animate) => {
+      offset.current = px
+      node.style.transition = animate ? 'transform 0.22s ease' : 'none'
+      node.style.transform = `translate3d(${px}px,0,0)`
     }
 
-    document.addEventListener('touchmove', onMove, { passive: false })
-    document.addEventListener('touchend', onEnd)
-    document.addEventListener('touchcancel', onEnd)
-  }
+    const clearLongPress = () => {
+      if (longPressTimer) {
+        window.clearTimeout(longPressTimer)
+        longPressTimer = 0
+      }
+    }
+
+    const onStart = (e) => {
+      if (e.touches.length !== 1) return
+      const target = e.target
+      if (
+        target instanceof Element &&
+        target.closest('button, input, textarea, a, [role="menu"]')
+      ) {
+        mode.current = 'control'
+        return
+      }
+      const touch = e.touches[0]
+      start.x = touch.clientX
+      start.y = touch.clientY
+      mode.current = 'pending'
+      setOffset(0, false)
+
+      longPressTimer = window.setTimeout(() => {
+        mode.current = 'drag'
+        touchTodoDrag.id = todo.id
+        setDragging(true)
+        try {
+          navigator.vibrate?.(12)
+        } catch {
+          /* iOS may ignore */
+        }
+      }, LONG_PRESS_MS)
+    }
+
+    const onMove = (e) => {
+      const touch = e.touches[0]
+      if (!touch) return
+      const dx = touch.clientX - start.x
+      const dy = touch.clientY - start.y
+
+      if (mode.current === 'drag') {
+        e.preventDefault()
+        clearTouchDragVisual()
+        const el = document.elementFromPoint(touch.clientX, touch.clientY)
+        const overTodo = el?.closest('[data-todo-drop]')
+        const overCal = el?.closest('[data-cal-drop]')
+        if (overTodo && overTodo.getAttribute('data-todo-drop') !== todo.id) {
+          overTodo.classList.add('touch-drag-over')
+        } else if (overCal) {
+          overCal.classList.add('touch-drag-over')
+        }
+        return
+      }
+
+      if (mode.current === 'pending') {
+        if (Math.abs(dy) > AXIS && Math.abs(dy) > Math.abs(dx)) {
+          clearLongPress()
+          mode.current = 'scroll'
+          return
+        }
+        if (Math.abs(dx) > AXIS && Math.abs(dx) > Math.abs(dy)) {
+          clearLongPress()
+          mode.current = 'swipe'
+        }
+      }
+
+      if (mode.current === 'swipe') {
+        e.preventDefault()
+        const next = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx))
+        setOffset(next, false)
+      }
+    }
+
+    const onEnd = (e) => {
+      clearLongPress()
+      const dx = offset.current
+
+      if (mode.current === 'drag') {
+        finishTouchDrag(e.changedTouches?.[0])
+        mode.current = 'idle'
+        setOffset(0, true)
+        return
+      }
+
+      if (mode.current === 'swipe') {
+        if (dx >= SWIPE_COMMIT) {
+          setOffset(0, true)
+          onToggle(todo.id)
+        } else if (dx <= -SWIPE_COMMIT) {
+          setOffset(-Math.min(window.innerWidth, 420), true)
+          window.setTimeout(() => {
+            setRemoving(true)
+            window.setTimeout(() => onDelete(todo.id), 220)
+          }, 80)
+        } else {
+          setOffset(0, true)
+        }
+      }
+
+      mode.current = 'idle'
+    }
+
+    node.addEventListener('touchstart', onStart, { passive: true })
+    node.addEventListener('touchmove', onMove, { passive: false })
+    node.addEventListener('touchend', onEnd)
+    node.addEventListener('touchcancel', onEnd)
+    return () => {
+      clearLongPress()
+      node.removeEventListener('touchstart', onStart)
+      node.removeEventListener('touchmove', onMove)
+      node.removeEventListener('touchend', onEnd)
+      node.removeEventListener('touchcancel', onEnd)
+    }
+  }, [editing, finishTouchDrag, onDelete, onToggle, todo.id])
 
   const startEdit = () => {
     setDraftText(todo.text)
@@ -231,22 +337,9 @@ export function TodoItem({
   return (
     <li
       data-todo-drop={todo.id}
-      draggable={!editing}
-      onDragStart={(e) => {
-        e.dataTransfer.setData(TODO_DRAG_TYPE, todo.id)
-        e.dataTransfer.setData('text/plain', todo.id)
-        e.dataTransfer.effectAllowed = 'copyMove'
-        touchTodoDrag.id = todo.id
-        setDragging(true)
-      }}
-      onDragEnd={() => {
-        touchTodoDrag.id = null
-        setDragging(false)
-        setDragOver(false)
-      }}
+      title={t('todo.longPressToMove')}
       onDragOver={(e) => {
         e.preventDefault()
-        e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move'
         setDragOver(true)
       }}
       onDragLeave={() => setDragOver(false)}
@@ -259,30 +352,34 @@ export function TodoItem({
         if (id) onReorder?.(id, todo.id)
       }}
       className={[
-        'group todo-row',
+        'group todo-row todo-swipe',
         dragOver ? 'is-drag-over' : '',
-        dragging ? 'opacity-50' : '',
+        dragging ? 'is-dragging opacity-80' : '',
         removing ? 'animate-removing' : 'animate-todo-enter',
       ].join(' ')}
     >
-      <div className="space-y-1.5 py-3.5 px-1 sm:px-1.5">
+      <div className="todo-swipe__actions" aria-hidden>
+        <div className="todo-swipe__complete">
+          <Check size={18} strokeWidth={2.4} />
+        </div>
+        <div className="todo-swipe__delete">
+          <Trash2 size={18} strokeWidth={2} />
+        </div>
+      </div>
+
+      <div ref={frontRef} className="todo-swipe__front space-y-1.5 py-3.5 px-1 sm:px-1.5">
         {/* Строка задачи: текст по центру с чекбоксом */}
         <div className="flex items-center gap-1">
           <button
             type="button"
-            draggable={false}
-            aria-label={t('todo.drag')}
-            title={t('todo.drag')}
-            className="touch-target flex h-11 w-11 shrink-0 cursor-grab active:cursor-grabbing items-center justify-center text-muted dark:text-zinc-400 hover:text-ink-soft dark:hover:text-zinc-200 active:text-ink-soft"
-            onMouseDown={(e) => e.stopPropagation()}
-            onTouchStart={handleGripTouchStart}
-          >
-            <GripVertical size={20} strokeWidth={1.75} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onToggle(todo.id)}
+            onPointerUp={(e) => {
+              if (e.pointerType === 'touch') e.preventDefault()
+              onToggle(todo.id)
+            }}
+            onClick={(e) => {
+              if (e.detail === 0) return
+              onToggle(todo.id)
+            }}
             aria-label={
               todo.completed ? t('todo.uncomplete') : t('todo.complete')
             }
@@ -474,19 +571,27 @@ export function TodoItem({
                               ? t('todo.collapseSteps')
                               : t('todo.expandSteps')}
                           </button>
+
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setEditMenuOpen(false)
+                              handleDelete()
+                            }}
+                            className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[14px] text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                          >
+                            <Trash2
+                              size={15}
+                              strokeWidth={1.75}
+                              className="shrink-0 opacity-80"
+                            />
+                            {t('todo.delete')}
+                          </button>
                         </div>
                       </>,
                       document.body,
                     )}
-
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    aria-label={t('todo.delete')}
-                    className="btn-danger-hover touch-target flex items-center justify-center rounded-xl text-muted/80 dark:text-zinc-400"
-                  >
-                    <Trash2 size={16} strokeWidth={1.75} />
-                  </button>
                 </div>
               </div>
             )}
@@ -495,7 +600,7 @@ export function TodoItem({
 
         {/* Бейджи ниже — не влияют на вертикальный центр текста */}
         {showMetaRow && (
-          <div className="pl-[5.25rem] space-y-1">
+          <div className="pl-[2.85rem] space-y-1">
             {(todo.habitId ||
               priority !== 'none' ||
               estimated > 0 ||
@@ -539,7 +644,6 @@ export function TodoItem({
             )}
           </div>
         )}
-      </div>
 
       <div
         className={['todo-accordion', expanded && !editing ? 'is-open' : '']
@@ -633,6 +737,7 @@ export function TodoItem({
             </form>
           </div>
         </div>
+      </div>
       </div>
     </li>
   )

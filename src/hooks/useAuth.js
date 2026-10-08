@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { normalizeAuthError } from '../utils/authErrors'
 import { getDeviceKey, getDeviceLabel } from '../utils/deviceInfo'
 import {
   clearLoginFailures,
@@ -84,7 +85,7 @@ export function useAuth() {
 
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
       if (!mounted) return
-      if (sessionError) setError(sessionError.message)
+      if (sessionError) setError(normalizeAuthError(sessionError.message))
       setSession(data.session ?? null)
       setLoading(false)
       if (data.session?.user?.id) {
@@ -142,7 +143,7 @@ export function useAuth() {
     if (signUpError) {
       const msg = /duplicate|unique|already/i.test(signUpError.message)
         ? 'nickname_taken'
-        : signUpError.message
+        : normalizeAuthError(signUpError.message)
       setError(msg)
       return { ok: false, error: msg }
     }
@@ -187,8 +188,9 @@ export function useAuth() {
         .maybeSingle()
 
       if (lookupError) {
-        setError(lookupError.message)
-        return { ok: false, error: lookupError.message }
+        const msg = normalizeAuthError(lookupError.message)
+        setError(msg)
+        return { ok: false, error: msg }
       }
       if (!profile?.email) {
         setError('nickname_not_found')
@@ -241,8 +243,9 @@ export function useAuth() {
         }
       }
 
-      setError(signInError.message)
-      return { ok: false, error: signInError.message }
+      const msg = normalizeAuthError(signInError.message)
+      setError(msg)
+      return { ok: false, error: msg }
     }
 
     await clearLoginFailures(loginKey)
@@ -253,8 +256,9 @@ export function useAuth() {
     setError(null)
     const { error: signOutError } = await supabase.auth.signOut()
     if (signOutError) {
-      setError(signOutError.message)
-      return { ok: false, error: signOutError.message }
+      const msg = normalizeAuthError(signOutError.message)
+      setError(msg)
+      return { ok: false, error: msg }
     }
     setRecoveryMode(false)
     return { ok: true }
@@ -274,7 +278,9 @@ export function useAuth() {
         .select('email')
         .ilike('nickname', email)
         .maybeSingle()
-      if (lookupError) return { ok: false, error: lookupError.message }
+      if (lookupError) {
+        return { ok: false, error: normalizeAuthError(lookupError.message) }
+      }
       if (!profile?.email) return { ok: false, error: 'nickname_not_found' }
       email = profile.email
     }
@@ -287,7 +293,7 @@ export function useAuth() {
     if (resetError) {
       const msg = /rate.?limit|email rate/i.test(resetError.message)
         ? 'email_rate_limit'
-        : resetError.message
+        : normalizeAuthError(resetError.message)
       setError(msg)
       return { ok: false, error: msg }
     }
@@ -299,8 +305,9 @@ export function useAuth() {
     setError(null)
     const { error: updateError } = await supabase.auth.updateUser({ password })
     if (updateError) {
-      setError(updateError.message)
-      return { ok: false, error: updateError.message }
+      const msg = normalizeAuthError(updateError.message)
+      setError(msg)
+      return { ok: false, error: msg }
     }
     setRecoveryMode(false)
     return { ok: true }

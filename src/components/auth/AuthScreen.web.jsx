@@ -3,6 +3,7 @@ import { LoginForm } from './LoginForm.web'
 import { SignUpForm } from './SignUpForm.web'
 import { RecoveryPasswordForm } from './RecoveryPasswordForm.web'
 import { useLocale } from '../../i18n/LocaleContext'
+import { mapAuthError } from '../../utils/authErrors'
 
 /**
  * Экран входа/регистрации / сброса пароля.
@@ -72,15 +73,7 @@ export function AuthScreen({
     const result = await requestPasswordReset(identifier)
     setLoading(false)
     if (!result.ok) {
-      setError(
-        result.error === 'nickname_not_found'
-          ? t('auth.nicknameNotFound')
-          : result.error === 'empty_login'
-            ? t('auth.loginRequired')
-            : result.error === 'email_rate_limit'
-              ? t('auth.emailRateLimit')
-              : result.error,
-      )
+      setError(mapAuthError(result.error, t) || t('auth.resetFailed'))
       return
     }
     setInfo(t('auth.resetEmailSent'))

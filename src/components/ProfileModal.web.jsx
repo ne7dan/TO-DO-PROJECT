@@ -17,6 +17,7 @@ import {
   recordLoginFailure,
 } from '../utils/loginLockout'
 import { ACCENTS, BG_THEMES } from '../utils/appearance'
+import { isNetworkError } from '../utils/authErrors'
 
 const fieldClass =
   'w-full rounded-xl border border-[var(--border-color)] bg-surface dark:bg-zinc-950 px-3.5 py-2.5 text-sm text-ink dark:text-zinc-50 outline-none focus:ring-2 focus:ring-[var(--accent-glow)]'
@@ -491,7 +492,7 @@ export function ProfileModal({
                     className="text-sm text-rose-600 dark:text-rose-400"
                     role="alert"
                   >
-                    {error}
+                    {isNetworkError(error) ? t('auth.networkError') : error}
                   </p>
                 )}
               </section>
@@ -572,7 +573,7 @@ export function ProfileModal({
                         className="text-sm text-rose-600 dark:text-rose-400"
                         role="alert"
                       >
-                        {error}
+                        {isNetworkError(error) ? t('auth.networkError') : error}
                       </p>
                     )}
                   </div>

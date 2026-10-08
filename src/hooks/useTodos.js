@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { fromDbRow, toDbPayload, insertTodoRow, clampSortOrder } from '../lib/todoMapper'
+import { createWriteQueue, patchTodoRow } from '../lib/todoSync'
 import {
   applyAutoFreeze,
   buildDayStatuses,
@@ -144,6 +145,25 @@ export function useTodos(userId) {
   const todosRef = useRef(todos)
   const spentPendingRef = useRef(new Map())
   const spentTimerRef = useRef(null)
+  const writeQueueRef = useRef(createWriteQueue())
+  const pendingIdsRef = useRef(new Set())
+  const pendingCountRef = useRef(new Map())
+
+  const beginPending = useCallback((id) => {
+    const n = (pendingCountRef.current.get(id) || 0) + 1
+    pendingCountRef.current.set(id, n)
+    pendingIdsRef.current.add(id)
+  }, [])
+
+  const endPending = useCallback((id) => {
+    const n = (pendingCountRef.current.get(id) || 1) - 1
+    if (n <= 0) {
+      pendingCountRef.current.delete(id)
+      pendingIdsRef.current.delete(id)
+    } else {
+      pendingCountRef.current.set(id, n)
+    }
+  }, [])
 
   todosRef.current = todos
 
@@ -239,8 +259,74 @@ export function useTodos(userId) {
       return
     }
     setError(null)
-    setTodos((data ?? []).map(fromDbRow).filter(Boolean))
+    const incoming = (data ?? []).map(fromDbRow).filter(Boolean)
+    const pending = pendingIdsRef.current
+    if (pending.size === 0) {
+      setTodos(incoming)
+      return
+    }
+    setTodos((prev) => {
+      const localById = new Map(normalizeTodos(prev).map((t) => [t.id, t]))
+      return incoming.map((row) => (pending.has(row.id) ? localById.get(row.id) ?? row : row))
+    })
   }, [userId])
+
+  useEffect(() => {
+    if (!userId) return undefined
+
+    const channel = supabase
+      .channel(`todos-sync:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'todos',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old?.id
+            if (!deletedId || pendingIdsRef.current.has(deletedId)) return
+            setTodos((prev) => prev.filter((t) => t.id !== deletedId))
+            return
+          }
+
+          const row = fromDbRow(payload.new)
+          if (!row || pendingIdsRef.current.has(row.id)) return
+
+          setTodos((prev) => {
+            const list = normalizeTodos(prev)
+            const idx = list.findIndex((t) => t.id === row.id)
+            if (idx === -1) {
+              return payload.eventType === 'INSERT' ? [row, ...list] : list
+            }
+            const next = [...list]
+            next[idx] = { ...list[idx], ...row }
+            return next
+          })
+        },
+      )
+      .subscribe()
+
+    const onResume = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return
+      }
+      void refreshTodos()
+    }
+
+    document.addEventListener('visibilitychange', onResume)
+    window.addEventListener('online', onResume)
+    window.addEventListener('focus', onResume)
+
+    return () => {
+      void supabase.removeChannel(channel)
+      document.removeEventListener('visibilitychange', onResume)
+      window.removeEventListener('online', onResume)
+      window.removeEventListener('focus', onResume)
+    }
+  }, [userId, refreshTodos])
 
   /** Загрузка стрика + разовый перенос из localStorage */
   useEffect(() => {
@@ -347,36 +433,43 @@ export function useTodos(userId) {
   /** Оптимистично обновляет локальный список и патчит строку в БД. */
   const patchRemote = useCallback(
     async (id, uiPatch) => {
-      if (!userId) return
+      if (!userId) return { ok: false }
+      beginPending(id)
       let payload = toDbPayload(uiPatch)
-      // title может отсутствовать в схеме — пробуем, при ошибке колонки убираем
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const { error: updateError } = await supabase
-          .from('todos')
-          .update(payload)
-          .eq('id', id)
-          .eq('user_id', userId)
-        if (!updateError) return
-        const msg = updateError.message || ''
-        if (/Could not find the 'title' column/i.test(msg) && payload.title !== undefined) {
-          const { title: _t, ...rest } = payload
-          payload = rest
-          continue
+      delete payload.id
+      delete payload.user_id
+
+      const result = await writeQueueRef.current.enqueue(id, async () => {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const patched = await patchTodoRow(supabase, {
+            userId,
+            id,
+            fields: payload,
+          })
+          if (patched.ok) return patched
+          const msg = patched.error?.message || ''
+          if (/habit_id|uuid/i.test(msg) && payload.habit_id != null) {
+            payload = { ...payload, habit_id: null }
+            continue
+          }
+          if (/out of range for type integer/i.test(msg)) {
+            payload = { ...payload, sort_order: clampSortOrder(attempt) }
+            continue
+          }
+          return patched
         }
-        if (/habit_id|uuid/i.test(msg) && payload.habit_id != null) {
-          payload = { ...payload, habit_id: null }
-          continue
-        }
-        if (/out of range for type integer/i.test(msg)) {
-          payload = { ...payload, sort_order: clampSortOrder(attempt) }
-          continue
-        }
-        setError(updateError.message)
-        console.error('[todos] update', updateError.message)
-        return
+        return { ok: false, error: { message: 'Не удалось сохранить задачу' } }
+      })
+
+      endPending(id)
+      if (!result.ok) {
+        const msg = result.error?.message || 'Не удалось сохранить задачу'
+        setError(msg)
+        console.error('[todos] update', msg)
       }
+      return result
     },
-    [userId],
+    [userId, beginPending, endPending],
   )
 
   const addTodo = useCallback(
@@ -406,12 +499,14 @@ export function useTodos(userId) {
       }
 
       setTodos((prev) => [draft, ...normalizeTodos(prev)])
+      beginPending(draft.id)
 
-      const { data, error: insertError } = await insertTodoRow(
-        supabase,
-        draft,
-        userId,
+      const { data, error: insertError } = await writeQueueRef.current.enqueue(
+        draft.id,
+        () => insertTodoRow(supabase, draft, userId),
       )
+
+      endPending(draft.id)
 
       if (insertError) {
         setError(insertError.message)
@@ -422,11 +517,13 @@ export function useTodos(userId) {
       const saved = fromDbRow(data)
       if (saved) {
         setTodos((prev) =>
-          prev.map((t) => (t.id === draft.id ? saved : t)),
+          prev.map((t) =>
+            t.id === draft.id ? { ...saved, completed: t.completed } : t,
+          ),
         )
       }
     },
-    [userId],
+    [userId, beginPending, endPending],
   )
 
   const updateTodo = useCallback(
@@ -600,12 +697,14 @@ export function useTodos(userId) {
       }
 
       setTodos((prev) => [draft, ...normalizeTodos(prev)])
+      beginPending(draft.id)
 
-      const { data, error: insertError } = await insertTodoRow(
-        supabase,
-        draft,
-        userId,
+      const { data, error: insertError } = await writeQueueRef.current.enqueue(
+        draft.id,
+        () => insertTodoRow(supabase, draft, userId),
       )
+
+      endPending(draft.id)
 
       if (insertError) {
         setError(insertError.message)
@@ -616,11 +715,13 @@ export function useTodos(userId) {
       const saved = fromDbRow(data)
       if (saved) {
         setTodos((prev) =>
-          prev.map((t) => (t.id === draft.id ? saved : t)),
+          prev.map((t) =>
+            t.id === draft.id ? { ...saved, completed: t.completed } : t,
+          ),
         )
       }
     },
-    [userId],
+    [userId, beginPending, endPending],
   )
 
   const ensureHabitGoals = useCallback(
@@ -670,29 +771,29 @@ export function useTodos(userId) {
 
       setTodos((prev) => [...additions, ...normalizeTodos(prev)])
 
-      const inserted = []
-
       for (const item of additions) {
-        const { data, error: insertError } = await insertTodoRow(
-          supabase,
-          item,
-          userId,
+        beginPending(item.id)
+        const { data, error: insertError } = await writeQueueRef.current.enqueue(
+          item.id,
+          () => insertTodoRow(supabase, item, userId),
         )
+        endPending(item.id)
         if (insertError) {
           setError(insertError.message)
+          setTodos((prev) => prev.filter((t) => t.id !== item.id))
           continue
         }
         const saved = fromDbRow(data)
-        if (saved) inserted.push(saved)
+        if (saved) {
+          setTodos((prev) =>
+            prev.map((t) =>
+              t.id === item.id ? { ...saved, completed: t.completed } : t,
+            ),
+          )
+        }
       }
-
-      setTodos((prev) => {
-        const tempIds = new Set(additions.map((a) => a.id))
-        const withoutTemp = prev.filter((t) => !tempIds.has(t.id))
-        return [...inserted, ...withoutTemp]
-      })
     },
-    [userId],
+    [userId, beginPending, endPending],
   )
 
   const removeTodosByHabitId = useCallback(
@@ -739,37 +840,55 @@ export function useTodos(userId) {
       )
 
       await Promise.all(
-        targets.map((todo) =>
-          supabase
-            .from('todos')
-            .update({ completed: todo.completed })
-            .eq('id', todo.id)
-            .eq('user_id', userId),
-        ),
+        targets.map((todo) => {
+          beginPending(todo.id)
+          return writeQueueRef.current
+            .enqueue(todo.id, () =>
+              patchTodoRow(supabase, {
+                userId,
+                id: todo.id,
+                fields: { completed: todo.completed },
+              }),
+            )
+            .finally(() => endPending(todo.id))
+        }),
       )
     },
-    [userId],
+    [userId, beginPending, endPending],
   )
 
   const toggleTodo = useCallback(
     async (id) => {
-      let nextTodo = null
+      const current = normalizeTodos(todosRef.current).find((t) => t.id === id)
+      if (!current || !userId) return
+
+      const nextCompleted = !current.completed
       setTodos((prev) =>
-        normalizeTodos(prev).map((t) => {
-          if (t.id !== id) return t
-          nextTodo = { ...t, completed: !t.completed }
-          return nextTodo
+        normalizeTodos(prev).map((t) =>
+          t.id === id ? { ...t, completed: nextCompleted } : t,
+        ),
+      )
+
+      beginPending(id)
+      const result = await writeQueueRef.current.enqueue(id, () =>
+        patchTodoRow(supabase, {
+          userId,
+          id,
+          fields: { completed: nextCompleted },
         }),
       )
-      if (!nextTodo || !userId) return
-      const { error: updateError } = await supabase
-        .from('todos')
-        .update({ completed: nextTodo.completed })
-        .eq('id', id)
-        .eq('user_id', userId)
-      if (updateError) setError(updateError.message)
+      endPending(id)
+
+      if (!result.ok) {
+        setError(result.error?.message || 'Не удалось сохранить задачу')
+        setTodos((prev) =>
+          normalizeTodos(prev).map((t) =>
+            t.id === id ? { ...t, completed: current.completed } : t,
+          ),
+        )
+      }
     },
-    [userId],
+    [userId, beginPending, endPending],
   )
 
   const deleteTodo = useCallback(

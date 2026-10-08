@@ -140,12 +140,19 @@ export function useHabits(userId) {
   const persistHabit = useCallback(
     async (habit) => {
       if (!userId) return
-      const { error: upError } = await supabase
-        .from('habits')
-        .upsert(habitToDbPayload(habit, userId), { onConflict: 'id' })
-      if (upError) {
-        console.error('[habits] upsert', upError.message)
-        setError(upError.message)
+      const payload = habitToDbPayload(habit, userId)
+      let lastError = null
+      for (let i = 0; i < 4; i += 1) {
+        const { error: upError } = await supabase
+          .from('habits')
+          .upsert(payload, { onConflict: 'id' })
+        if (!upError) return
+        lastError = upError
+        await new Promise((resolve) => setTimeout(resolve, 220 * (i + 1)))
+      }
+      if (lastError) {
+        console.error('[habits] upsert', lastError.message)
+        setError(lastError.message)
       }
     },
     [userId],

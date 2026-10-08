@@ -1,25 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useLocale } from '../../i18n/LocaleContext'
+import { mapAuthError } from '../../utils/authErrors'
 
 const fieldClass =
   'w-full box-border rounded-2xl border border-black/[0.08] dark:border-zinc-700 bg-surface dark:bg-zinc-950 px-4 py-3.5 text-left text-[16px] leading-snug text-ink dark:text-zinc-50 outline-none transition-[border-color,box-shadow] focus:border-[var(--accent-color)] focus:shadow-[0_0_0_3px_var(--accent-glow)] disabled:opacity-50 disabled:cursor-not-allowed'
 
 const labelClass =
   'block text-left text-[11px] font-medium uppercase tracking-[0.14em] text-muted dark:text-zinc-400'
-
-function mapAuthError(error, t, remainingLabel) {
-  if (!error) return null
-  if (error === 'nickname_not_found') return t('auth.nicknameNotFound')
-  if (error === 'empty_login') return t('auth.loginRequired')
-  if (error === 'nickname_taken') return t('auth.nicknameTaken')
-  if (error === 'login_locked') {
-    return remainingLabel
-      ? t('auth.loginLocked', { time: remainingLabel })
-      : t('auth.loginLockedShort')
-  }
-  return error
-}
 
 function formatRemaining(totalSeconds) {
   const s = Math.max(0, Math.ceil(totalSeconds))

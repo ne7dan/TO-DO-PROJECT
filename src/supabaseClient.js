@@ -1,14 +1,23 @@
+import { Capacitor } from '@capacitor/core'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-// Новый ключ Publishable; anon — запасной вариант для старых .env
 const supabaseAnonKey =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   import.meta.env.VITE_SUPABASE_ANON_KEY
 
+function isProjectSupabaseUrl(url) {
+  try {
+    const host = new URL(String(url)).hostname
+    return host.endsWith('.supabase.co') && host !== 'supabase.co'
+  } catch {
+    return false
+  }
+}
+
 /** true, если URL и ключ заданы (локально в .env или в Vercel Environment Variables). */
 export const isSupabaseConfigured = Boolean(
-  supabaseUrl &&
+  isProjectSupabaseUrl(supabaseUrl) &&
     supabaseAnonKey &&
     !String(supabaseAnonKey).includes('your_supabase'),
 )
@@ -22,10 +31,58 @@ if (!isSupabaseConfigured) {
 }
 
 /**
+ * На вебе (Safari / PWA) ходим через same-origin `/supabase`,
+ * иначе iOS WebKit часто отдаёт «Load failed» на кросс-доменный fetch.
+ * Нативное приложение бьёт в Supabase напрямую (CapacitorHttp).
+ */
+function isIosSafari() {
+  if (typeof navigator === 'undefined') return false
+  return /iP(hone|ad|od)/i.test(navigator.userAgent)
+}
+
+function resolveSupabaseUrl(directUrl) {
+  const trimmed = String(directUrl ?? '').replace(/\/$/, '')
+  if (!trimmed) return trimmed
+  if (Capacitor.isNativePlatform()) return trimmed
+  if (typeof window === 'undefined') return trimmed
+  // iOS Safari: same-origin proxy (иначе WebKit даёт Load failed).
+  // Mac/desktop: прямой URL — нужен realtime между устройствами.
+  if (isIosSafari()) return `${window.location.origin}/supabase`
+  return trimmed
+}
+
+async function fetchWithRetry(input, init) {
+  const attempts = 3
+  let lastError
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fetch(input, init)
+    } catch (err) {
+      lastError = err
+      if (err?.name === 'AbortError') throw err
+      await new Promise((resolve) => setTimeout(resolve, 280 * (i + 1)))
+    }
+  }
+  throw lastError
+}
+
+const clientUrl = isSupabaseConfigured
+  ? resolveSupabaseUrl(supabaseUrl)
+  : 'https://placeholder.supabase.co'
+
+/**
  * Единый клиент Supabase.
  * При отсутствии env не падаем с белым экраном — подставляем заглушку.
  */
 export const supabase = createClient(
-  isSupabaseConfigured ? supabaseUrl : 'https://placeholder.supabase.co',
+  clientUrl,
   isSupabaseConfigured ? supabaseAnonKey : 'public-anon-key',
+  {
+    global: { fetch: fetchWithRetry },
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: !Capacitor.isNativePlatform(),
+    },
+  },
 )

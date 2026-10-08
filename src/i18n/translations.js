@@ -127,6 +127,8 @@ export const translations = {
     'auth.loginLockedShort':
       'Слишком много неверных попыток. Вход временно заблокирован.',
     'auth.loginLockedButton': 'Подождите {time}',
+    'auth.networkError':
+      'Нет связи с сервером. Проверьте интернет и попробуйте снова.',
 
     'period.day': 'На день',
     'period.week': 'На неделю',
@@ -180,6 +182,7 @@ export const translations = {
     'todo.focus': 'Фокус на задаче',
     'todo.edit': 'Редактировать',
     'todo.drag': 'Перетащить задачу',
+    'todo.longPressToMove': 'Удерживайте, чтобы переместить',
     'todo.save': 'Сохранить',
     'todo.cancel': 'Отмена',
     'todo.estimate': 'Время выполнения',
@@ -384,6 +387,8 @@ export const translations = {
     'auth.loginLockedShort':
       'Too many failed attempts. Login is temporarily locked.',
     'auth.loginLockedButton': 'Wait {time}',
+    'auth.networkError':
+      'Could not reach the server. Check your connection and try again.',
 
     'period.day': 'Today',
     'period.week': 'This week',
@@ -437,6 +442,7 @@ export const translations = {
     'todo.focus': 'Focus on task',
     'todo.edit': 'Edit',
     'todo.drag': 'Drag task',
+    'todo.longPressToMove': 'Hold to reorder',
     'todo.save': 'Save',
     'todo.cancel': 'Cancel',
     'todo.estimate': 'Time to complete',

@@ -729,6 +729,53 @@ html[data-accent='amber'] {
     box-shadow: inset 3px 0 0 var(--accent-color);
   }
 
+  html.platform-ios .todo-swipe {
+    position: relative;
+    overflow: hidden;
+  }
+
+  html.platform-ios .todo-swipe__actions {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  html.platform-ios .todo-swipe__complete,
+  html.platform-ios .todo-swipe__delete {
+    display: flex;
+    width: 4.5rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  html.platform-ios .todo-swipe__complete {
+    background: color-mix(in srgb, var(--accent-color) 88%, black);
+    color: var(--accent-contrast);
+  }
+
+  html.platform-ios .todo-swipe__delete {
+    background: #e11d48;
+    color: #fff;
+  }
+
+  html.platform-ios .todo-swipe__front {
+    position: relative;
+    z-index: 1;
+    background: var(--bg-card);
+    touch-action: pan-y;
+  }
+
+  html.platform-ios .todo-swipe.is-dragging .todo-swipe__front {
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  }
+
   .auth-stage {
     position: relative;
     isolation: isolate;

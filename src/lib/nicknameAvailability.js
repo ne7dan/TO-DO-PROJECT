@@ -26,16 +26,21 @@ export async function isNicknameAvailable(nickname, excludeUserId = null) {
   return false
 }
 
-/** Убирает из списка уже занятые ники. */
+/** Убирает из списка уже занятые ники (один запрос, без шторма на iOS). */
 export async function filterAvailableNicknames(candidates) {
-  const list = Array.isArray(candidates) ? candidates : []
-  const available = []
+  const list = [...new Set((Array.isArray(candidates) ? candidates : []).filter(Boolean))]
+  if (list.length === 0) return []
 
-  for (const nick of list) {
-    // eslint-disable-next-line no-await-in-loop
-    const free = await isNicknameAvailable(nick)
-    if (free) available.push(nick)
+  const orFilter = list.map((n) => `nickname.ilike.${n}`).join(',')
+  const { data, error } = await supabase.from('profiles').select('nickname').or(orFilter)
+
+  if (error) {
+    console.error('[nickname] filter', error.message)
+    return list
   }
 
-  return available
+  const taken = new Set(
+    (data ?? []).map((row) => String(row.nickname ?? '').toLowerCase()),
+  )
+  return list.filter((nick) => !taken.has(nick.toLowerCase()))
 }

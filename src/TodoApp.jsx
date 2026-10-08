@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Header } from './components/Header'
 import { PeriodTabs } from './components/PeriodTabs'
 import { TodoList } from './components/TodoList'
@@ -11,6 +11,7 @@ import { useLocale } from './i18n/LocaleContext'
 import { toDateKey, shiftWeek, shiftMonthKey, shiftYearKey, addDays } from './utils/dates'
 import { celebrateDayComplete } from './utils/celebrate'
 import { PULL_REFRESH_EVENT } from './utils/appearance'
+import { isNetworkError } from './utils/authErrors'
 
 const Pomodoro = lazy(() =>
   import('./components/Pomodoro').then((m) => ({ default: m.Pomodoro })),
@@ -208,8 +209,14 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
     [deleteHabit, removeTodosByHabitId],
   )
 
+  const toggleLockRef = useRef(new Map())
+
   const handleToggleTodo = useCallback(
     (id) => {
+      const now = Date.now()
+      if (now - (toggleLockRef.current.get(id) || 0) < 450) return
+      toggleLockRef.current.set(id, now)
+
       const todo = allTodos.find((t) => t.id === id)
       if (!todo) return
       const nextCompleted = !todo.completed
@@ -265,7 +272,7 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
             className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
             role="alert"
           >
-            {todosError}
+            {isNetworkError(todosError) ? t('auth.networkError') : todosError}
           </p>
         )}
 

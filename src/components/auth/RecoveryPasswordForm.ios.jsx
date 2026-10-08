@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLocale } from '../../i18n/LocaleContext'
+import { mapAuthError } from '../../utils/authErrors'
 
 const fieldClass =
   'w-full rounded-2xl border border-black/[0.08] dark:border-zinc-700 bg-surface dark:bg-zinc-950 px-4 py-3.5 text-left text-[16px] leading-snug text-ink dark:text-zinc-50 outline-none transition-[border-color,box-shadow] focus:border-[var(--accent-color)] focus:shadow-[0_0_0_3px_var(--accent-glow)]'
@@ -28,7 +29,9 @@ export function RecoveryPasswordForm({ onSubmit, onCancel, loading }) {
       return
     }
     const result = await onSubmit(password)
-    if (!result?.ok) setError(result?.error || t('auth.resetFailed'))
+    if (!result?.ok) {
+      setError(mapAuthError(result?.error, t) || t('auth.resetFailed'))
+    }
   }
 
   return (
