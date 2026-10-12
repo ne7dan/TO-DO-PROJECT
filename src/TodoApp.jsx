@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { App } from '@capacitor/app'
 import { Header } from './components/Header'
 import { PeriodTabs } from './components/PeriodTabs'
 import { TodoList } from './components/TodoList'
@@ -12,6 +13,13 @@ import { toDateKey, shiftWeek, shiftMonthKey, shiftYearKey, addDays } from './ut
 import { celebrateDayComplete } from './utils/celebrate'
 import { PULL_REFRESH_EVENT } from './utils/appearance'
 import { isNetworkError } from './utils/authErrors'
+import { isIosNative } from './utils/platform'
+import {
+  cancelTodoReminder,
+  clearReminderTime,
+  syncTodoReminder,
+} from './lib/goalReminders.ios'
+import { pickTodayGoals, syncCalendarWidget } from './lib/calendarWidget.ios'
 
 const Pomodoro = lazy(() =>
   import('./components/Pomodoro').then((m) => ({ default: m.Pomodoro })),
@@ -36,7 +44,7 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
     todos: allTodos,
     loading: todosLoading,
     error: todosError,
-    refreshTodos,
+    refreshAll,
     addTodo,
     updateTodo,
     addSpentTime,
@@ -59,10 +67,13 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
     periodHasActive,
     streak,
     freezesLeft,
+    completedDaysSet,
+    freezeDates,
   } = useTodos(user?.id)
 
   const {
     habits,
+    refreshHabits,
     addHabit,
     toggleHabit,
     setHabitCompletion,
@@ -70,13 +81,70 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
     deleteHabit,
   } = useHabits(user?.id)
 
+  const pushWidgetSnapshot = useCallback(() => {
+    if (todosLoading && allTodos.length === 0) return
+    void syncCalendarWidget({
+      streak,
+      statuses: dayStatuses,
+      goals: pickTodayGoals(allTodos),
+      todos: allTodos,
+      habits,
+      completedDays: Array.from(completedDaysSet),
+      freezeDates,
+      counts: dayGoalCounts,
+    })
+  }, [
+    todosLoading,
+    streak,
+    dayStatuses,
+    allTodos,
+    habits,
+    completedDaysSet,
+    freezeDates,
+    dayGoalCounts,
+  ])
+
   useEffect(() => {
-    const onPullRefresh = () => {
-      void refreshTodos()
+    pushWidgetSnapshot()
+  }, [pushWidgetSnapshot])
+
+  useEffect(() => {
+    if (!isIosNative()) return undefined
+    let handle
+    void App.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) pushWidgetSnapshot()
+    }).then((listener) => {
+      handle = listener
+    })
+    return () => {
+      void handle?.remove()
+    }
+  }, [pushWidgetSnapshot])
+
+  useEffect(() => {
+    if (!isIosNative()) return undefined
+    let lastKey = toDateKey()
+    const timer = window.setInterval(() => {
+      const key = toDateKey()
+      if (key === lastKey) return
+      lastKey = key
+      void ensureHabitGoals(habits, key)
+      pushWidgetSnapshot()
+    }, 30_000)
+    return () => window.clearInterval(timer)
+  }, [habits, ensureHabitGoals, pushWidgetSnapshot])
+
+  useEffect(() => {
+    const onPullRefresh = (event) => {
+      const job = Promise.all([
+        refreshAll(),
+        refreshHabits(),
+      ])
+      event.detail?.wait?.(job)
     }
     window.addEventListener(PULL_REFRESH_EVENT, onPullRefresh)
     return () => window.removeEventListener(PULL_REFRESH_EVENT, onPullRefresh)
-  }, [refreshTodos])
+  }, [refreshAll, refreshHabits])
 
   const [activePeriod, setActivePeriod] = useState('day')
   const [selectedDate, setSelectedDate] = useState(() => toDateKey())
@@ -235,6 +303,9 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
       if (todo.habitId && todo.period === 'day') {
         setHabitCompletion(todo.habitId, todo.date, nextCompleted)
       }
+      if (isIosNative()) {
+        void syncTodoReminder({ ...todo, completed: nextCompleted })
+      }
     },
     [allTodos, toggleTodo, setHabitCompletion],
   )
@@ -245,6 +316,10 @@ export default function TodoApp({ user, onSignOut, onRequestPasswordReset }) {
       void deleteTodo(id)
       if (todo?.habitId && todo.period === 'day') {
         skipHabitForDate(todo.habitId, todo.date)
+      }
+      if (isIosNative() && todo?.id) {
+        clearReminderTime(todo.id)
+        void cancelTodoReminder(todo.id)
       }
     },
     [allTodos, deleteTodo, skipHabitForDate],

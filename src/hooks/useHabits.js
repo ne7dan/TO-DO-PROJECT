@@ -135,6 +135,21 @@ export function useHabits(userId) {
     }
   }, [userId])
 
+  const refreshHabits = useCallback(async () => {
+    if (!userId) return
+    const { data, error: fetchError } = await supabase
+      .from('habits')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    if (fetchError) {
+      setError(fetchError.message)
+      return
+    }
+    setError(null)
+    setHabits((data ?? []).map(habitFromDbRow).filter(Boolean))
+  }, [userId])
+
   const list = useMemo(() => normalizeHabits(habits), [habits])
 
   const persistHabit = useCallback(
@@ -271,6 +286,7 @@ export function useHabits(userId) {
     habits: list,
     loading,
     error,
+    refreshHabits,
     addHabit,
     toggleHabit,
     setHabitCompletion,

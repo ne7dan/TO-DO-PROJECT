@@ -357,6 +357,24 @@ html[data-accent='amber'] {
     min-height: 100%;
   }
 
+  html.platform-ios {
+    scrollbar-gutter: auto;
+  }
+
+  html.platform-ios,
+  html.platform-ios body,
+  html.platform-ios * {
+    scrollbar-width: none !important;
+  }
+
+  html.platform-ios::-webkit-scrollbar,
+  html.platform-ios body::-webkit-scrollbar,
+  html.platform-ios *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
   body::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -454,7 +472,10 @@ html[data-accent='amber'] {
 
   input,
   textarea,
-  [contenteditable='true'] {
+  [contenteditable='true'],
+  label:has(input),
+  label:has(textarea),
+  label:has(select) {
     -webkit-user-select: text;
     user-select: text;
     -webkit-touch-callout: default;
@@ -482,6 +503,33 @@ html[data-accent='amber'] {
   /* Ячейки календаря: без scale — иначе даты наезжают в плотной сетке */
   button.cal-day:active {
     transform: none;
+  }
+
+  html.platform-ios .cal-swipe {
+    overflow: hidden;
+  }
+
+  html.platform-ios .cal-swipe__viewport {
+    --cal-swipe-gap: 1.75rem;
+    overflow: hidden;
+    touch-action: pan-y;
+  }
+
+  html.platform-ios .cal-swipe__track {
+    display: flex;
+    width: 100%;
+    column-gap: var(--cal-swipe-gap);
+    will-change: transform;
+  }
+
+  html.platform-ios .cal-swipe__page {
+    box-sizing: border-box;
+    flex: 0 0 100%;
+    width: 100%;
+  }
+
+  html.platform-ios .cal-swipe__track.is-settling {
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
 
@@ -600,10 +648,108 @@ html[data-accent='amber'] {
     font-size: 16px !important;
   }
 
+  html.platform-ios .todo-remind-sheet input[type='date'],
+  html.platform-ios .todo-remind-sheet select {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  html.platform-ios .todo-remind-sheet .todo-remind-time-wrap,
+  html.platform-ios .todo-remind-sheet .todo-remind-select-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 3rem;
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--border-color) 100%, transparent);
+  }
+
+  html.platform-ios .todo-remind-sheet .todo-remind-time-face,
+  html.platform-ios .todo-remind-sheet .todo-remind-select-face {
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    text-align: center;
+    font-size: 19.2px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--text-main);
+  }
+
+  html.platform-ios .todo-remind-sheet .todo-remind-time-native,
+  html.platform-ios .todo-remind-sheet .todo-remind-select-native {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    border: 0;
+    font-size: 19.2px !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  html.platform-ios .todo-add-input {
+    font-size: 16px !important;
+    pointer-events: auto;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  html.platform-ios input.pomodoro-time-input {
+    font-size: clamp(4.5rem, 18vw, 9.5rem) !important;
+    line-height: 1;
+    min-height: 1.1em;
+    padding: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
   @keyframes pull-to-refresh-spin {
     to {
       transform: rotate(360deg);
     }
+  }
+
+  html.platform-ios .profile-ios-sheet {
+    background-color: var(--bg-main);
+    background-image:
+      radial-gradient(
+        ellipse 95% 60% at 50% -20%,
+        var(--theme-glow-1),
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 55% 45% at 100% 100%,
+        var(--theme-glow-2),
+        transparent 52%
+      ),
+      radial-gradient(
+        ellipse 45% 35% at 0% 85%,
+        color-mix(in srgb, var(--accent-color) 10%, transparent),
+        transparent 45%
+      );
+    background-repeat: no-repeat;
+    background-size: cover;
+  }
+
+  html.platform-ios .profile-ios-sheet .pull-to-refresh-root,
+  html.platform-ios .profile-ios-sheet .pull-to-refresh__content,
+  html.platform-ios .profile-ios-sheet .profile-scroll {
+    background: transparent;
   }
 
   /* Профиль: без gutter скроллбара, чтобы панели не съезжали вправо */
@@ -617,6 +763,460 @@ html[data-accent='amber'] {
     height: 0;
   }
 
+  html.platform-ios .pomodoro-zen {
+    background-color: #000000;
+    color: var(--text-main);
+    transition: background-color 0.45s ease, color 0.45s ease;
+    touch-action: manipulation;
+  }
+
+  html.platform-ios .pomodoro-zen__chrome {
+    transition:
+      opacity 0.45s ease,
+      visibility 0.45s ease,
+      transform 0.45s ease;
+    opacity: 1;
+    visibility: visible;
+  }
+
+  html.platform-ios .pomodoro-zen.is-chrome-hidden .pomodoro-zen__chrome {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transform: translateY(10px);
+  }
+
+  html.platform-ios .pomodoro-zen.is-chrome-hidden .pomodoro-zen__chrome,
+  html.platform-ios .pomodoro-zen.is-chrome-hidden .pomodoro-zen__chrome * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  html.platform-ios .pomodoro-zen.is-chrome-held .pomodoro-zen__chrome {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    transform: none !important;
+  }
+
+  html.platform-ios:not(.dark) .pomodoro-zen {
+    background-color: #ffffff;
+  }
+
+  html.platform-ios .pomodoro-zen__glow {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(
+        ellipse 95% 62% at 50% -14%,
+        color-mix(in srgb, var(--bg-card) 88%, transparent),
+        transparent 64%
+      ),
+      radial-gradient(
+        ellipse 58% 48% at -10% 110%,
+        color-mix(in srgb, var(--bg-warm) 78%, transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 58% 48% at 110% 110%,
+        color-mix(in srgb, var(--bg-warm) 72%, var(--theme-glow-2)),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 88% 78% at 50% 48%,
+        transparent 28%,
+        color-mix(in srgb, var(--bg-card) 72%, transparent) 100%
+      ),
+      radial-gradient(
+        ellipse 85% 58% at 50% 0%,
+        color-mix(in srgb, var(--theme-glow-1) 100%, var(--bg-card)),
+        transparent 62%
+      );
+    transition: opacity 0.45s ease;
+  }
+
+  html.platform-ios:not(.dark) .pomodoro-zen__glow {
+    background:
+      radial-gradient(
+        ellipse 95% 62% at 50% -14%,
+        color-mix(in srgb, var(--bg-warm) 82%, transparent),
+        transparent 64%
+      ),
+      radial-gradient(
+        ellipse 58% 48% at -10% 110%,
+        color-mix(in srgb, var(--bg-main) 70%, transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 58% 48% at 110% 110%,
+        color-mix(in srgb, var(--bg-warm) 68%, var(--theme-glow-2)),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 88% 78% at 50% 48%,
+        transparent 30%,
+        color-mix(in srgb, var(--bg-warm) 58%, transparent) 100%
+      ),
+      radial-gradient(
+        ellipse 85% 58% at 50% 0%,
+        var(--theme-glow-1),
+        transparent 62%
+      );
+  }
+
+  /* OLED: фон почти чёрный/белый, без отдельной подсветки градиент пропадает */
+  html.platform-ios.dark[data-theme='oled-black'] .pomodoro-zen__glow {
+    background:
+      radial-gradient(
+        ellipse 95% 62% at 50% -14%,
+        rgb(255 255 255 / 0.2),
+        transparent 62%
+      ),
+      radial-gradient(
+        ellipse 58% 48% at -10% 110%,
+        rgb(255 255 255 / 0.14),
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 58% 48% at 110% 110%,
+        rgb(255 255 255 / 0.12),
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 88% 78% at 50% 48%,
+        transparent 28%,
+        rgb(255 255 255 / 0.16) 100%
+      );
+  }
+
+  html.platform-ios:not(.dark)[data-theme='oled-black'] .pomodoro-zen__glow {
+    background:
+      radial-gradient(
+        ellipse 95% 62% at 50% -14%,
+        rgb(0 0 0 / 0.16),
+        transparent 62%
+      ),
+      radial-gradient(
+        ellipse 58% 48% at -10% 110%,
+        rgb(0 0 0 / 0.12),
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 58% 48% at 110% 110%,
+        rgb(0 0 0 / 0.1),
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 88% 78% at 50% 48%,
+        transparent 30%,
+        rgb(0 0 0 / 0.14) 100%
+      );
+  }
+
+  @keyframes pomodoro-flow-breathe {
+    0%,
+    100% {
+      transform: translate(-50%, -50%) scale(0.84);
+      opacity: 0.32;
+    }
+    50% {
+      transform: translate(-50%, -50%) scale(1.18);
+      opacity: 0.78;
+    }
+  }
+
+  html.platform-ios .pomodoro-flow-pulse {
+    pointer-events: none;
+    position: absolute;
+    left: 50%;
+    top: 42%;
+    z-index: 1;
+    width: 160%;
+    height: 58%;
+    border-radius: 50%;
+    background: radial-gradient(
+      ellipse at center,
+      color-mix(in srgb, var(--bg-card) 78%, white 8%) 0%,
+      color-mix(in srgb, var(--theme-glow-1) 100%, var(--bg-warm)) 38%,
+      transparent 72%
+    );
+    filter: blur(42px);
+    transform: translate(-50%, -50%);
+    animation: pomodoro-flow-breathe 5.4s ease-in-out infinite;
+  }
+
+  html.platform-ios .pomodoro-flow-pulse.is-running {
+    opacity: 1;
+  }
+
+  html.platform-ios:not(.dark) .pomodoro-flow-pulse {
+    background: radial-gradient(
+      ellipse at center,
+      color-mix(in srgb, var(--bg-warm) 88%, transparent) 0%,
+      var(--theme-glow-1) 40%,
+      transparent 74%
+    );
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html.platform-ios .pomodoro-flow-pulse {
+      animation: none;
+      opacity: 0.4;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+
+  html.platform-ios .pomodoro-zen-liquid {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__body {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    transform-origin: 50% 100%;
+    transition: height 1.35s cubic-bezier(0.22, 0.72, 0.2, 1.18);
+  }
+
+  html.platform-ios .pomodoro-zen-liquid.is-active .pomodoro-zen-liquid__body {
+    animation: liquid-sway 5.8s ease-in-out infinite;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__meniscus {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -1.4rem;
+    height: 2.4rem;
+    z-index: 1;
+    background: radial-gradient(
+      ellipse 92% 90% at 50% 120%,
+      color-mix(in srgb, var(--theme-glow-1) 55%, transparent),
+      transparent 70%
+    );
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__surface {
+    position: absolute;
+    top: -3.35rem;
+    left: -12%;
+    width: 124%;
+    height: 4.4rem;
+    z-index: 3;
+    animation: liquid-bob 3.8s ease-in-out infinite;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__wave {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 200%;
+    will-change: transform;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__wave--back {
+    top: 0.85rem;
+    color: color-mix(in srgb, var(--theme-glow-2) 62%, var(--accent-muted));
+    opacity: 0.38;
+    animation: liquid-wave 9.4s linear infinite;
+    filter: blur(0.6px);
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__wave--mid {
+    top: 0.35rem;
+    color: color-mix(in srgb, var(--theme-glow-1) 78%, var(--accent-color));
+    opacity: 0.62;
+    animation: liquid-wave-reverse 6.2s linear infinite;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__wave--front {
+    color: color-mix(in srgb, var(--theme-glow-1) 82%, white 16%);
+    opacity: 0.92;
+    animation: liquid-wave 3.8s linear infinite;
+    filter: drop-shadow(0 -6px 14px color-mix(in srgb, var(--theme-glow-1) 40%, transparent));
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__foam {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 1.15rem;
+    height: 10px;
+    z-index: 4;
+    background: linear-gradient(
+      to bottom,
+      rgb(255 255 255 / 0.28),
+      rgb(255 255 255 / 0.04) 70%,
+      transparent
+    );
+    filter: blur(1.2px);
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid.is-active .pomodoro-zen-liquid__wave--back {
+    animation-duration: 6.8s;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid.is-active .pomodoro-zen-liquid__wave--mid {
+    animation-duration: 4.6s;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid.is-active .pomodoro-zen-liquid__wave--front {
+    animation-duration: 2.8s;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid.is-active .pomodoro-zen-liquid__surface {
+    animation-duration: 2.6s;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__fill {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--theme-glow-1) 28%, transparent) 0%,
+        color-mix(in srgb, var(--theme-glow-1) 42%, var(--accent-color)) 22%,
+        color-mix(in srgb, var(--bg-card) 28%, var(--accent-color)) 58%,
+        color-mix(in srgb, var(--accent-hover) 48%, #041018) 100%
+      );
+    opacity: 0.78;
+  }
+
+  html.platform-ios:not(.dark) .pomodoro-zen-liquid__fill {
+    opacity: 0.62;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__caustics {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background:
+      radial-gradient(ellipse 38% 14% at 18% 12%, rgb(255 255 255 / 0.28), transparent 58%),
+      radial-gradient(ellipse 44% 16% at 82% 22%, rgb(255 255 255 / 0.16), transparent 62%),
+      radial-gradient(ellipse 56% 20% at 48% 6%, color-mix(in srgb, var(--theme-glow-1) 48%, transparent), transparent 64%),
+      radial-gradient(ellipse 30% 40% at 30% 70%, rgb(255 255 255 / 0.07), transparent 70%),
+      repeating-linear-gradient(
+        112deg,
+        transparent 0 14px,
+        rgb(255 255 255 / 0.045) 14px 20px,
+        transparent 20px 36px
+      );
+    background-size: 150% 150%, 170% 170%, 130% 130%, 180% 180%, 240% 240%;
+    mix-blend-mode: soft-light;
+    animation: liquid-caustics 8.2s ease-in-out infinite;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__sheen {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -40%;
+    width: 42%;
+    z-index: 2;
+    background: linear-gradient(
+      108deg,
+      transparent 0%,
+      rgb(255 255 255 / 0.2) 38%,
+      transparent 70%
+    );
+    animation: liquid-sheen 8.4s ease-in-out infinite;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__bubbles {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__bubbles span {
+    position: absolute;
+    bottom: -8%;
+    border-radius: 50%;
+    background: rgb(255 255 255 / 0.28);
+    box-shadow: inset 0 0 4px rgb(255 255 255 / 0.45);
+    opacity: 0;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid.is-active .pomodoro-zen-liquid__bubbles span {
+    animation: liquid-bubble 7s ease-in infinite;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__bubbles span:nth-child(1) {
+    left: 18%;
+    width: 7px;
+    height: 7px;
+    animation-delay: 0s;
+    animation-duration: 6.2s;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__bubbles span:nth-child(2) {
+    left: 38%;
+    width: 5px;
+    height: 5px;
+    animation-delay: 1.4s;
+    animation-duration: 7.4s;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__bubbles span:nth-child(3) {
+    left: 57%;
+    width: 9px;
+    height: 9px;
+    animation-delay: 2.2s;
+    animation-duration: 5.8s;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__bubbles span:nth-child(4) {
+    left: 72%;
+    width: 4px;
+    height: 4px;
+    animation-delay: 0.8s;
+    animation-duration: 8s;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__bubbles span:nth-child(5) {
+    left: 86%;
+    width: 6px;
+    height: 6px;
+    animation-delay: 3.1s;
+    animation-duration: 6.6s;
+  }
+
+  html.platform-ios .pomodoro-zen-liquid__ring {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      circle at 50% 72%,
+      color-mix(in srgb, var(--theme-glow-1) 55%, transparent) 0%,
+      transparent 62%
+    );
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html.platform-ios .pomodoro-zen-liquid__surface,
+    html.platform-ios .pomodoro-zen-liquid__wave,
+    html.platform-ios .pomodoro-zen-liquid__caustics,
+    html.platform-ios .pomodoro-zen-liquid__sheen,
+    html.platform-ios .pomodoro-zen-liquid__body,
+    html.platform-ios .pomodoro-zen-liquid__bubbles span {
+      animation: none !important;
+    }
+  }
+
   html.platform-ios .zen-scroll {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -626,19 +1226,6 @@ html[data-accent='amber'] {
     display: none;
     width: 0;
     height: 0;
-  }
-
-  html.platform-ios .pomodoro-panel {
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    max-width: none;
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
-    border-radius: 1.25rem 1.25rem 0 0;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   /* Скроллбар в стиле UI — боковая «рейка» */
@@ -770,6 +1357,18 @@ html[data-accent='amber'] {
     z-index: 1;
     background: var(--bg-card);
     touch-action: pan-y;
+  }
+
+  html.platform-ios .todo-strike {
+    display: inline;
+    width: auto;
+    max-width: none;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  html.platform-ios .ui-card {
+    padding-left: 1.35rem;
   }
 
   html.platform-ios .todo-swipe.is-dragging .todo-swipe__front {
@@ -1030,6 +1629,81 @@ html[data-accent='amber'] {
   }
   100% {
     transform: translateX(-50%);
+  }
+}
+
+@keyframes liquid-wave-reverse {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes liquid-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-0.4deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(0.55deg);
+  }
+}
+
+@keyframes liquid-sway {
+  0%,
+  100% {
+    transform: scaleX(1) scaleY(1) skewX(0deg);
+  }
+  35% {
+    transform: scaleX(1.035) scaleY(0.985) skewX(-0.7deg);
+  }
+  68% {
+    transform: scaleX(0.975) scaleY(1.02) skewX(0.55deg);
+  }
+}
+
+@keyframes liquid-bubble {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.7);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate3d(12px, -120%, 0) scale(1.05);
+    opacity: 0;
+  }
+}
+
+@keyframes liquid-caustics {
+  0% {
+    background-position: 8% 12%, 92% 28%, 50% 6%, 0% 20%;
+    opacity: 0.42;
+  }
+  50% {
+    background-position: 38% 30%, 62% 8%, 42% 18%, 45% 55%;
+    opacity: 0.7;
+  }
+  100% {
+    background-position: 78% 8%, 18% 42%, 70% 4%, 90% 10%;
+    opacity: 0.42;
+  }
+}
+
+@keyframes liquid-sheen {
+  0% {
+    transform: translateX(-20%) skewX(-14deg);
+    opacity: 0.08;
+  }
+  42% {
+    opacity: 0.28;
+  }
+  100% {
+    transform: translateX(210%) skewX(-14deg);
+    opacity: 0.06;
   }
 }
 

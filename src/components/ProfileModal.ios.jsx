@@ -21,12 +21,15 @@ import { isNetworkError } from '../utils/authErrors'
 import { PullToRefresh } from './PullToRefresh'
 
 const fieldClass =
-  'w-full rounded-xl border border-[var(--border-color)] bg-surface dark:bg-zinc-950 px-3.5 py-2.5 text-sm text-ink dark:text-zinc-50 outline-none focus:ring-2 focus:ring-[var(--accent-glow)]'
+  'w-full rounded-xl border border-[var(--border-color)] bg-transparent px-3.5 py-3 text-sm text-ink dark:text-zinc-50 outline-none focus:ring-2 focus:ring-[var(--accent-glow)]'
 
 const FORBIDDEN = /[^\p{L}\p{N}_-]/u
 
 const segmentWrap =
   'flex rounded-xl border border-[var(--border-color)] p-1 bg-[color-mix(in_srgb,var(--bg-warm)_70%,transparent)]'
+
+const sectionTitleClass =
+  'font-display text-base font-semibold tracking-tight text-ink dark:text-zinc-50'
 
 function formatDate(value, localeTag) {
   if (!value) return '—'
@@ -352,7 +355,7 @@ export function ProfileModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] bg-black/40 backdrop-blur-[2px] overscroll-none"
+      className="profile-ios-sheet fixed inset-0 z-[80] flex flex-col overscroll-none"
       role="dialog"
       aria-modal="true"
       aria-label={t('profile.title')}
@@ -363,7 +366,7 @@ export function ProfileModal({
         if (e.target === e.currentTarget) e.preventDefault()
       }}
     >
-      <div className="w-full max-w-md ui-card p-5 sm:p-6 animate-slide-up max-h-[min(90vh,640px)] flex flex-col overflow-hidden overscroll-contain">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col overflow-hidden overscroll-contain px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
         <div className="flex items-start justify-between gap-3 shrink-0">
           <div>
             <p className="text-[10px] uppercase tracking-[0.16em] text-muted dark:text-zinc-400">
@@ -406,16 +409,17 @@ export function ProfileModal({
         >
           <PullToRefresh
             scrollRef={scrollRef}
+            enabled={tab !== 'appearance'}
             onRefresh={() => loadProfile({ soft: true })}
           >
           <div className="w-full min-w-0 space-y-5 pb-1">
           {tab === 'account' || !showAppearance ? (
             <>
               <section className="space-y-2">
-                <h3 className="text-[10px] uppercase tracking-[0.16em] text-muted dark:text-zinc-400">
+                <h3 className={sectionTitleClass}>
                   {t('profile.account')}
                 </h3>
-                <dl className="rounded-xl border border-[var(--border-color)] bg-canvas-warm/50 dark:bg-zinc-950/50 px-3.5 py-3 space-y-2.5 text-sm">
+                <dl className="rounded-xl border border-[var(--border-color)] bg-transparent px-4 py-4 space-y-3 text-sm">
                   <div className="flex min-w-0 justify-between gap-3">
                     <dt className="shrink-0 text-muted dark:text-zinc-400">
                       {t('auth.email')}
@@ -447,12 +451,12 @@ export function ProfileModal({
               </section>
 
               <section className="space-y-2">
-                <h3 className="text-[10px] uppercase tracking-[0.16em] text-muted dark:text-zinc-400">
+                <h3 className={sectionTitleClass}>
                   {t('profile.changeNickname')}
                 </h3>
                 <form
                   onSubmit={(e) => void handleChangeNickname(e)}
-                  className="rounded-xl border border-[var(--border-color)] bg-canvas-warm/40 dark:bg-zinc-950/40 p-3 space-y-2.5"
+                  className="rounded-xl border border-[var(--border-color)] bg-transparent px-4 py-4 space-y-3"
                 >
                   <label className="block space-y-1">
                     <span className="text-[10px] uppercase tracking-[0.16em] text-muted dark:text-zinc-400">
@@ -517,25 +521,25 @@ export function ProfileModal({
               </section>
 
               <section className="space-y-2">
-                <h3 className="text-[10px] uppercase tracking-[0.16em] text-muted dark:text-zinc-400">
+                <h3 className={sectionTitleClass}>
                   {t('profile.devices')}
                 </h3>
                 {loading ? (
-                  <p className="text-sm text-muted dark:text-zinc-400">
+                  <p className="rounded-xl border border-[var(--border-color)] bg-transparent px-4 py-4 text-sm text-muted dark:text-zinc-400">
                     {t('auth.loading')}
                   </p>
                 ) : devices.length === 0 ? (
-                  <p className="text-sm text-muted dark:text-zinc-400">
+                  <p className="rounded-xl border border-[var(--border-color)] bg-transparent px-4 py-4 text-sm text-muted dark:text-zinc-400">
                     {t('profile.noDevices')}
                   </p>
                 ) : (
-                  <ul className="space-y-2">
+                  <ul className="rounded-xl border border-[var(--border-color)] bg-transparent px-4 py-3 space-y-1">
                     {devices.map((device) => {
                       const isCurrent = device.device_key === currentKey
                       return (
                         <li
                           key={device.id}
-                          className="flex items-start gap-3 rounded-xl border border-[var(--border-color)] px-3 py-2.5"
+                          className="flex items-start gap-3 py-2.5"
                         >
                           <Monitor
                             size={18}
@@ -563,7 +567,7 @@ export function ProfileModal({
               </section>
 
               <section className="space-y-2 pt-1 pb-1">
-                <h3 className="text-[10px] uppercase tracking-[0.16em] text-muted dark:text-zinc-400">
+                <h3 className={sectionTitleClass}>
                   {t('profile.security')}
                 </h3>
                 <p className="text-xs text-muted dark:text-zinc-400">
@@ -602,7 +606,7 @@ export function ProfileModal({
           ) : (
             <div className="animate-fade-in space-y-5">
               <section className="space-y-2">
-                <h3 className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                <h3 className={sectionTitleClass}>
                   {t('profile.language')}
                 </h3>
                 <div className={segmentWrap}>
@@ -623,7 +627,7 @@ export function ProfileModal({
 
               {typeof onModeChange === 'function' && (
                 <section className="space-y-2">
-                  <h3 className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  <h3 className={sectionTitleClass}>
                     {t('profile.mode')}
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
@@ -665,7 +669,7 @@ export function ProfileModal({
 
               {typeof onBgThemeChange === 'function' && (
                 <section className="space-y-2">
-                  <h3 className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  <h3 className={sectionTitleClass}>
                     {t('appearance.theme')}
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
@@ -728,7 +732,7 @@ export function ProfileModal({
 
               {typeof onAccentChange === 'function' && (
                 <section className="space-y-2">
-                  <h3 className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                  <h3 className={sectionTitleClass}>
                     {t('appearance.accent')}
                   </h3>
                   <div className="grid grid-cols-4 gap-2">

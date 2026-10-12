@@ -112,15 +112,16 @@ export function TodoList({
     </div>
   ) : null
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!text.trim()) return
     const addDate = isDay
       ? selectedDate
       : periodAddDate(period, periodAnchorDate)
-    onAdd(period, text, addDate, {
+    const result = await onAdd(period, text, addDate, {
       priority,
     })
+    if (result && result.ok === false) return
     setText('')
     setPriority('none')
   }
@@ -179,7 +180,7 @@ export function TodoList({
 
       <form onSubmit={handleSubmit} className="space-y-2.5">
         <div className="flex gap-2">
-          <label className="flex flex-1 min-w-0 items-center gap-3 rounded-xl border border-[var(--border-color)] bg-transparent px-3.5 py-3 transition-colors focus-within:border-[var(--accent-color)] focus-within:ring-2 focus-within:ring-[var(--accent-glow)]">
+          <div className="flex flex-1 min-w-0 items-center gap-3 rounded-xl border border-[var(--border-color)] bg-transparent px-3.5 py-3 transition-colors focus-within:border-[var(--accent-color)] focus-within:ring-2 focus-within:ring-[var(--accent-glow)]">
             <Circle
               size={18}
               strokeWidth={1.5}
@@ -188,10 +189,19 @@ export function TodoList({
             />
             <input
               type="text"
+              inputMode="text"
+              enterKeyHint="done"
+              autoComplete="off"
+              autoCorrect="on"
               value={text}
               onChange={(e) =>
                 setText(e.target.value.slice(0, MAX_TODO_TEXT_LENGTH))
               }
+              onFocus={(e) => {
+                window.requestAnimationFrame(() => {
+                  e.target.scrollIntoView({ block: 'center', behavior: 'smooth' })
+                })
+              }}
               maxLength={MAX_TODO_TEXT_LENGTH}
               placeholder={
                 isDay
@@ -202,9 +212,9 @@ export function TodoList({
                         period: periodLabel.toLowerCase(),
                       })
               }
-              className="flex-1 min-w-0 bg-transparent text-sm text-ink dark:text-zinc-50 outline-none placeholder:text-muted dark:placeholder:text-zinc-400"
+              className="todo-add-input flex-1 min-w-0 bg-transparent text-[16px] text-ink dark:text-zinc-50 outline-none placeholder:text-muted dark:placeholder:text-zinc-400"
             />
-          </label>
+          </div>
           <button
             type="submit"
             aria-label={t('todos.add')}

@@ -42,11 +42,12 @@ export function PullToRefresh({
     const getScrollTop = () => {
       const el = scrollRef?.current
       if (el) return el.scrollTop
-      return (
-        window.scrollY ||
-        document.documentElement.scrollTop ||
-        document.body.scrollTop ||
-        0
+      const root = document.getElementById('root')
+      return Math.max(
+        window.scrollY || 0,
+        document.documentElement.scrollTop || 0,
+        document.body.scrollTop || 0,
+        root?.scrollTop || 0,
       )
     }
 
@@ -163,29 +164,39 @@ export function PullToRefresh({
           resetVisual(true)
         }
 
-        const run = onRefreshRef.current
-        if (typeof run === 'function') {
-          Promise.resolve()
-            .then(() => run())
-            .catch(() => {})
-            .finally(() => {
-              window.setTimeout(finish, 180)
-            })
-          return
+        const startedAt = Date.now()
+        const waitMin = () => {
+          const left = Math.max(0, 420 - (Date.now() - startedAt))
+          return new Promise((resolve) => window.setTimeout(resolve, left))
         }
 
-        // Страница: мягкий refresh — сохраняем градиент/тему, без location.reload
-        Promise.resolve()
-          .then(async () => {
+        const runRefresh = async () => {
+          const waiters = []
+          const run = onRefreshRef.current
+          if (typeof run === 'function') {
+            waiters.push(Promise.resolve().then(() => run()))
+          } else {
             const { reapplyStoredAppearance, PULL_REFRESH_EVENT } =
               await import('../utils/appearance')
             reapplyStoredAppearance()
-            window.dispatchEvent(new CustomEvent(PULL_REFRESH_EVENT))
-          })
+            window.dispatchEvent(
+              new CustomEvent(PULL_REFRESH_EVENT, {
+                detail: {
+                  wait: (job) => {
+                    waiters.push(Promise.resolve(job))
+                  },
+                },
+              }),
+            )
+          }
+          await Promise.all(waiters)
+          await waitMin()
+        }
+
+        Promise.resolve()
+          .then(runRefresh)
           .catch(() => {})
-          .finally(() => {
-            window.setTimeout(finish, 220)
-          })
+          .finally(finish)
         return
       }
 

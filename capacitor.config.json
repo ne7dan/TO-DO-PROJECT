@@ -19,6 +19,10 @@
     "Keyboard": {
       "resize": "none",
       "resizeOnFullScreen": true
+    },
+    "LocalNotifications": {
+      "iconColor": "#10b981",
+      "presentationOptions": ["sound", "banner", "list"]
     }
   }
 }

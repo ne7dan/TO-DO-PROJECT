@@ -30,3 +30,4 @@ scripts/
 *.njsproj
 *.sln
 *.sw?
+plugins/widget-bridge/.swiftpm/

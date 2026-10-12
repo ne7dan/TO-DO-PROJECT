@@ -18,6 +18,9 @@ if (isIosNative()) {
       'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover',
     )
   }
+  void import('./lib/pomodoroBackground.ios.js').then((mod) => {
+    mod.resetPomodoroAfterColdLaunch()
+  })
 }
 
 /** Убрать iOS-панель над клавиатурой (стрелки / галочка). */

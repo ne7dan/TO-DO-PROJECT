@@ -271,6 +271,25 @@ export function useTodos(userId) {
     })
   }, [userId])
 
+  const refreshStreak = useCallback(async () => {
+    if (!userId) return
+    const { data, error: fetchError } = await supabase
+      .from('user_streak_state')
+      .select('completed_days, freeze_dates')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (fetchError) {
+      console.error('[streak] refresh', fetchError.message)
+      return
+    }
+    setCompletedDays(asDateList(data?.completed_days))
+    setFreezeDates(asDateList(data?.freeze_dates))
+  }, [userId])
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([refreshTodos(), refreshStreak()])
+  }, [refreshTodos, refreshStreak])
+
   useEffect(() => {
     if (!userId) return undefined
 
@@ -475,7 +494,7 @@ export function useTodos(userId) {
   const addTodo = useCallback(
     async (period, text, dateKey = toDateKey(), meta = {}) => {
       const safeText = sanitizeTodoText(text)
-      if (!safeText || !userId) return
+      if (!safeText || !userId) return { ok: false }
 
       const list = normalizeTodos(todosRef.current)
       const minOrder = list.reduce(
@@ -511,7 +530,7 @@ export function useTodos(userId) {
       if (insertError) {
         setError(insertError.message)
         setTodos((prev) => prev.filter((t) => t.id !== draft.id))
-        return
+        return { ok: false }
       }
 
       const saved = fromDbRow(data)
@@ -522,6 +541,7 @@ export function useTodos(userId) {
           ),
         )
       }
+      return { ok: true }
     },
     [userId, beginPending, endPending],
   )
@@ -597,10 +617,7 @@ export function useTodos(userId) {
             if (dragged.period === 'day') return t.date === dragged.date
             return true
           })
-          .sort((a, b) => {
-            if (a.completed !== b.completed) return a.completed ? 1 : -1
-            return getOrder(a) - getOrder(b)
-          })
+          .sort((a, b) => getOrder(a) - getOrder(b))
 
         const fromIndex = group.findIndex((t) => t.id === draggedId)
         const toIndex = group.findIndex((t) => t.id === targetId)
@@ -738,6 +755,11 @@ export function useTodos(userId) {
           )
           .map((t) => t.habitId),
       )
+      const dayTexts = new Set(
+        list
+          .filter((t) => t.period === 'day' && t.date === dateKey)
+          .map((t) => t.text),
+      )
 
       const additions = []
       let minOrder = list.reduce(
@@ -749,6 +771,7 @@ export function useTodos(userId) {
         if (!habit?.id || dateKey < habit.startDate) continue
         if (habit.skippedDates?.[dateKey]) continue
         if (existing.has(habit.id)) continue
+        if (dayTexts.has(habit.text)) continue
 
         minOrder -= 1
         additions.push({
@@ -996,10 +1019,7 @@ export function useTodos(userId) {
           }
           return true
         })
-        .sort((a, b) => {
-          if (a.completed !== b.completed) return a.completed ? 1 : -1
-          return getOrder(a) - getOrder(b)
-        })
+        .sort((a, b) => getOrder(a) - getOrder(b))
     },
     [todos],
   )
@@ -1081,6 +1101,7 @@ export function useTodos(userId) {
     loading,
     error,
     refreshTodos,
+    refreshAll,
     addTodo,
     updateTodo,
     addSpentTime,

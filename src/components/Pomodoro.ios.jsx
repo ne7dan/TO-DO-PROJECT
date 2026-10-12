@@ -2,7 +2,6 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard } from '@capacitor/keyboard'
 import {
-  Maximize2,
   Minimize2,
   Minus,
   Pause,
@@ -15,6 +14,15 @@ import {
 import { displayTodoText } from '../utils/text'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useLocale } from '../i18n/LocaleContext'
+import {
+  cancelTimerNotifications,
+  catchUpTimer,
+  clearPomodoroRuntime,
+  loadPomodoroRuntime,
+  onAppForeground,
+  savePomodoroRuntime,
+  scheduleTimerNotifications,
+} from '../lib/pomodoroBackground.ios'
 
 const DEFAULT_WORK_MIN = 25
 const DEFAULT_BREAK_MIN = 5
@@ -80,15 +88,26 @@ function BlinkColon({ running }) {
   )
 }
 
-/** Уровень «жидкости» 0–100 (оставшееся время относительно текущей базы). */
-function LiquidFill({ level, finishing = false }) {
+function LiquidWaveLayer({ className, d }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 1200 80"
+      preserveAspectRatio="none"
+    >
+      <path fill="currentColor" d={d} />
+    </svg>
+  )
+}
+
+function ZenLiquidFill({ level, finishing = false, active = false }) {
   const clamped = Math.min(100, Math.max(0, level))
-  const waveId = useId().replace(/:/g, '')
 
   return (
     <div
       className={[
-        'pointer-events-none absolute inset-0 overflow-hidden rounded-xl',
+        'pomodoro-zen-liquid',
+        active ? 'is-active' : '',
         finishing ? 'animate-liquid-finish' : '',
       ]
         .filter(Boolean)
@@ -96,47 +115,37 @@ function LiquidFill({ level, finishing = false }) {
       aria-hidden
     >
       <div
-        className="absolute inset-x-0 bottom-0 transition-[height] duration-1000 linear"
+        className="pomodoro-zen-liquid__body"
         style={{ height: `${clamped}%` }}
       >
-        <svg
-          className="animate-liquid-wave absolute -top-3 left-0 h-4 w-[200%] text-[var(--accent-muted)] opacity-70"
-          viewBox="0 0 1200 40"
-          preserveAspectRatio="none"
-        >
-          <defs>
-            <linearGradient id={`liq-${waveId}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="currentColor" stopOpacity="0.95" />
-              <stop offset="100%" stopColor="currentColor" stopOpacity="0.35" />
-            </linearGradient>
-          </defs>
-          <path
-            fill={`url(#liq-${waveId})`}
-            d="M0 20 Q150 0 300 20 T600 20 T900 20 T1200 20 V40 H0 Z"
+        <div className="pomodoro-zen-liquid__meniscus" />
+        <div className="pomodoro-zen-liquid__surface">
+          <LiquidWaveLayer
+            className="pomodoro-zen-liquid__wave pomodoro-zen-liquid__wave--back"
+            d="M0 48 C 80 12, 160 72, 240 40 S 400 8, 480 44 640 78, 720 38 880 6, 960 46 1120 74, 1200 40 V80 H0 Z"
           />
-          <path
-            fill="currentColor"
-            opacity="0.35"
-            d="M0 22 Q150 38 300 22 T600 22 T900 22 T1200 22 V40 H0 Z"
+          <LiquidWaveLayer
+            className="pomodoro-zen-liquid__wave pomodoro-zen-liquid__wave--mid"
+            d="M0 40 C 100 70, 180 8, 280 42 S 460 76, 560 34 740 4, 840 48 1020 72, 1200 36 V80 H0 Z"
           />
-        </svg>
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(to bottom, color-mix(in srgb, var(--accent-muted) 35%, transparent), color-mix(in srgb, var(--accent-color) 18%, transparent), color-mix(in srgb, var(--accent-hover) 28%, transparent))',
-          }}
-        />
+          <LiquidWaveLayer
+            className="pomodoro-zen-liquid__wave pomodoro-zen-liquid__wave--front"
+            d="M0 34 C 70 4, 140 58, 210 30 S 350 2, 430 38 570 68, 650 28 790 0, 880 40 1020 64, 1200 32 V80 H0 Z"
+          />
+          <div className="pomodoro-zen-liquid__foam" />
+        </div>
+        <div className="pomodoro-zen-liquid__fill" />
+        <div className="pomodoro-zen-liquid__caustics" />
+        <div className="pomodoro-zen-liquid__sheen" />
+        <div className="pomodoro-zen-liquid__bubbles">
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
       </div>
-      {finishing && (
-        <div
-          className="absolute inset-0 animate-liquid-finish-ring"
-          style={{
-            background:
-              'radial-gradient(circle at center, var(--accent-glow) 0%, transparent 65%)',
-          }}
-        />
-      )}
+      {finishing && <div className="pomodoro-zen-liquid__ring animate-liquid-finish-ring" />}
     </div>
   )
 }
@@ -191,7 +200,7 @@ function EditableTimeDisplay({
         value={draft}
         aria-label={t('pomodoro.editTime')}
         title={t('pomodoro.editTimeFormat')}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => setDraft(e.target.value.replace(/[.,]/g, ':'))}
         onBlur={() => finish(true)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -202,7 +211,7 @@ function EditableTimeDisplay({
             finish(false)
           }
         }}
-        className={inputClassName}
+        className={['pomodoro-time-input', inputClassName].filter(Boolean).join(' ')}
       />
     )
   }
@@ -566,9 +575,12 @@ function AdjustButtons({ onAdjust, size = 'md' }) {
 function ZenMode({
   seconds,
   mode,
+  sessionMode,
   phase,
   running,
   showLive,
+  liquidLevel,
+  finishPulse,
   focusTask,
   focusOptions,
   onSelectFocus,
@@ -594,15 +606,59 @@ function ZenMode({
   const idleTimerRef = useRef(null)
   const scrollRef = useRef(null)
   const settingsRef = useRef(null)
+  const zenRef = useRef(null)
+  const inputFocusedRef = useRef(false)
+  const hiddenRef = useRef(false)
+  const touchRef = useRef(null)
+  inputFocusedRef.current = inputFocused
+
+  const setChrome = useCallback((visible) => {
+    hiddenRef.current = !visible
+    setControlsVisible(visible)
+    zenRef.current?.classList.toggle('is-chrome-hidden', !visible)
+    zenRef.current?.classList.toggle('is-chrome-held', Boolean(inputFocusedRef.current))
+  }, [])
 
   const revealControls = useCallback((sticky = false) => {
-    setControlsVisible(true)
+    setChrome(true)
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
-    if (sticky) return
-    idleTimerRef.current = setTimeout(() => {
-      setControlsVisible(false)
+    if (sticky || inputFocusedRef.current) return
+    idleTimerRef.current = window.setTimeout(() => {
+      if (inputFocusedRef.current) return
+      const active = document.activeElement
+      if (
+        active instanceof HTMLElement &&
+        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')
+      ) {
+        return
+      }
+      if (active instanceof HTMLElement) active.blur()
+      setChrome(false)
     }, CONTROLS_IDLE_MS)
+  }, [setChrome])
+
+  const onTouchStartReveal = useCallback((event) => {
+    const t = event.changedTouches[0]
+    if (!t) return
+    touchRef.current = { x: t.clientX, y: t.clientY, at: Date.now() }
   }, [])
+
+  const onTouchEndReveal = useCallback(
+    (event) => {
+      const start = touchRef.current
+      touchRef.current = null
+      if (!start) return
+      const t = event.changedTouches[0]
+      if (!t) return
+      const dist = Math.hypot(t.clientX - start.x, t.clientY - start.y)
+      if (Date.now() - start.at > 650 || dist > 16) return
+      if (!hiddenRef.current && event.target instanceof Element) {
+        if (event.target.closest('button, input, select, textarea, label')) return
+      }
+      revealControls(inputFocusedRef.current)
+    },
+    [revealControls],
+  )
 
   useEffect(() => {
     revealControls()
@@ -654,7 +710,7 @@ function ZenMode({
     const onFocusIn = (e) => {
       const el = e.target
       if (!(el instanceof HTMLElement)) return
-      if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && el.tagName !== 'SELECT') {
+      if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') {
         return
       }
       setInputFocused(true)
@@ -674,9 +730,7 @@ function ZenMode({
         const active = document.activeElement
         const stillInside =
           active instanceof HTMLElement && root.contains(active) &&
-          (active.tagName === 'INPUT' ||
-            active.tagName === 'TEXTAREA' ||
-            active.tagName === 'SELECT')
+          (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')
         if (stillInside) return
         setInputFocused(false)
         revealControls(false)
@@ -710,35 +764,55 @@ function ZenMode({
     }
   }, [])
 
-  const status = getZenStatus(mode, phase, t)
+  const viewingOther = mode !== sessionMode
+  const status = getZenStatus(viewingOther && !showLive ? mode : sessionMode, phase, t)
   const focusLabel = focusTask ? displayTodoText(focusTask.text) : ''
   const showControls = controlsVisible || inputFocused
+  const clockLocked = running || viewingOther
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col items-center bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 animate-fade-in"
-      onMouseMove={() => revealControls(inputFocused)}
-      onTouchStart={() => revealControls(inputFocused)}
+      ref={zenRef}
+      className={[
+        'pomodoro-zen fixed inset-0 z-[100] flex flex-col items-center animate-fade-in',
+        showControls ? '' : 'is-chrome-hidden',
+        inputFocused ? 'is-chrome-held' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      onTouchStart={onTouchStartReveal}
+      onTouchEnd={onTouchEndReveal}
       role="dialog"
       aria-modal="true"
       aria-label={t('pomodoro.zen')}
       style={{ ['--keyboard-inset']: `${keyboardInset}px` }}
     >
+      <div className="pomodoro-zen__glow" aria-hidden />
+      {sessionMode === 'pomodoro' && (
+        <ZenLiquidFill
+          level={liquidLevel}
+          finishing={finishPulse}
+          active={running && !viewingOther}
+        />
+      )}
+      {sessionMode === 'free' && (
+        <div
+          className={['pomodoro-flow-pulse', running ? 'is-running' : ''].join(' ')}
+          aria-hidden
+        />
+      )}
       <button
         type="button"
         onClick={onClose}
         aria-label={t('pomodoro.zenCollapse')}
-        className={[
-          'absolute right-[max(1rem,env(safe-area-inset-right))] top-[calc(env(safe-area-inset-top)+1.75rem)] z-20 flex h-11 w-11 items-center justify-center rounded-full border border-zinc-200 bg-white/80 text-zinc-600 backdrop-blur transition-opacity duration-500 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:bg-zinc-800',
-          showControls ? 'opacity-100' : 'opacity-0 pointer-events-none',
-        ].join(' ')}
+        className="pomodoro-zen__chrome absolute right-[max(1rem,env(safe-area-inset-right))] top-[calc(env(safe-area-inset-top)+1.75rem)] z-20 flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white/70 text-zinc-600 backdrop-blur hover:bg-white dark:border-white/10 dark:bg-black/40 dark:text-zinc-300 dark:hover:bg-black/60"
       >
         <Minimize2 size={18} />
       </button>
 
       <div
         ref={scrollRef}
-        className="zen-scroll flex h-full w-full max-w-xl flex-col items-center overflow-y-auto overscroll-contain px-6 py-[max(5rem,calc(env(safe-area-inset-top)+4rem))]"
+        className="zen-scroll relative z-10 flex h-full w-full max-w-xl flex-col items-center overflow-y-auto overscroll-contain px-6 py-[max(5rem,calc(env(safe-area-inset-top)+4rem))]"
         style={{
           paddingBottom: `calc(max(2rem, env(safe-area-inset-bottom, 0px)) + var(--keyboard-inset, 0px) + 1.5rem)`,
         }}
@@ -748,30 +822,31 @@ function ZenMode({
             <p className="font-display text-xs uppercase tracking-[0.28em] text-zinc-400 sm:text-sm">
               {status}
             </p>
-            {showLive && <LiveIndicator running={running} size="lg" />}
+            {showLive && (
+              <span className="pomodoro-zen__chrome inline-flex">
+                <LiveIndicator running={running} size="lg" />
+              </span>
+            )}
           </div>
         </div>
 
         <EditableTimeDisplay
           seconds={seconds}
-          running={running}
+          running={clockLocked}
           onCommit={onSetCustomTime}
           editOnSingleTap
           className={[
             'font-customMono font-bold tabular-nums tracking-tight leading-none text-[clamp(4.5rem,18vw,9.5rem)] text-zinc-900 dark:text-zinc-50 select-none',
-            running ? 'cursor-default' : 'cursor-text',
+            clockLocked ? 'cursor-default' : 'cursor-text',
           ].join(' ')}
-          inputClassName="w-full max-w-md text-center bg-transparent border-b-2 border-zinc-300 dark:border-zinc-600 outline-none font-customMono font-bold tabular-nums tracking-tight leading-none text-[clamp(3rem,14vw,7rem)] text-zinc-900 dark:text-zinc-50"
+          inputClassName="w-full max-w-full text-center bg-transparent border-b-2 border-zinc-300 dark:border-zinc-600 outline-none font-customMono font-bold tabular-nums tracking-tight leading-none text-[clamp(4.5rem,18vw,9.5rem)] text-zinc-900 dark:text-zinc-50"
         />
 
-        <div
-          className={[
-            'mt-6 flex justify-center transition-opacity duration-500',
-            showControls ? 'opacity-100' : 'opacity-0 pointer-events-none',
-          ].join(' ')}
-        >
-          <AdjustButtons onAdjust={onAdjust} size="lg" />
-        </div>
+        {!viewingOther && mode !== 'free' && (
+          <div className="pomodoro-zen__chrome mt-6 flex justify-center">
+            <AdjustButtons onAdjust={onAdjust} size="lg" />
+          </div>
+        )}
 
         {focusLabel && (
           <p className="mt-6 max-w-xl truncate text-center text-lg text-zinc-400 sm:text-xl">
@@ -779,15 +854,10 @@ function ZenMode({
           </p>
         )}
 
-        <div
-          className={[
-            'mt-8 w-full space-y-4 transition-opacity duration-500 sm:mt-12',
-            showControls ? 'opacity-100' : 'opacity-0 pointer-events-none',
-          ].join(' ')}
-        >
+        <div className="pomodoro-zen__chrome mt-8 w-full space-y-4 sm:mt-12">
           <ModeToggle mode={mode} onChange={onSwitchMode} />
 
-          {!running && (
+          {mode !== 'free' && (!running || viewingOther) && (
             <div ref={settingsRef}>
               <SettingsPanel
                 mode={mode}
@@ -814,7 +884,7 @@ function ZenMode({
           </div>
 
           <TimerControls
-            running={running}
+            running={running && !viewingOther}
             onToggle={onToggle}
             onReset={onReset}
             size="lg"
@@ -823,6 +893,28 @@ function ZenMode({
       </div>
     </div>
   )
+}
+
+function readRestoredTimer(settings) {
+  const saved = loadPomodoroRuntime()
+  if (!saved) return null
+  return catchUpTimer({
+    now: Date.now(),
+    running: !!saved.running,
+    mode: saved.mode || 'pomodoro',
+    phase: saved.phase || 'work',
+    seconds:
+      typeof saved.seconds === 'number'
+        ? saved.seconds
+        : Math.max(1, settings.workMin) * 60,
+    endsAt: saved.endsAt || null,
+    startedAt: saved.startedAt || null,
+    stopwatchOffset: saved.stopwatchOffset || 0,
+    settings: {
+      ...(saved.settings || settings),
+      freeMin: saved.mode === 'free' ? 0 : (saved.settings || settings).freeMin,
+    },
+  })
 }
 
 export function Pomodoro({
@@ -838,24 +930,42 @@ export function Pomodoro({
     breakMin: DEFAULT_BREAK_MIN,
     freeMin: 0,
   })
+  const savedWorkMin = Math.max(1, clampMinutes(settings.workMin, DEFAULT_WORK_MIN))
+  const savedBreakMin = clampMinutes(settings.breakMin, DEFAULT_BREAK_MIN)
 
-  const [mode, setMode] = useState('pomodoro')
-  const [phase, setPhase] = useState('work')
-  const [seconds, setSeconds] = useState(DEFAULT_WORK_MIN * 60)
-  /** База для «воды»: при ручной смене времени пересчитывается, чтобы уровень оставался полным. */
-  const [liquidTotal, setLiquidTotal] = useState(DEFAULT_WORK_MIN * 60)
-  const [finishPulse, setFinishPulse] = useState(false)
-  const [running, setRunning] = useState(false)
-  // На мобильных панель свёрнута; на ПК — открыта (без реакции на resize)
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.matchMedia('(max-width: 767px)').matches
+  const restoredRef = useRef(null)
+  if (restoredRef.current === null) {
+    restoredRef.current = readRestoredTimer({
+      ...settings,
+      workMin: savedWorkMin,
+      breakMin: savedBreakMin,
+    })
+  }
+  const restored = restoredRef.current
+
+  const [mode, setMode] = useState(restored?.mode || 'pomodoro')
+  const [sessionMode, setSessionMode] = useState(restored?.mode || 'pomodoro')
+  const [phase, setPhase] = useState(restored?.phase || 'work')
+  const [seconds, setSeconds] = useState(
+    restored?.seconds ?? savedWorkMin * 60,
+  )
+  /** Длительность текущей фазы — от неё считается наполнение воды. */
+  const [liquidTotal, setLiquidTotal] = useState(() => {
+    if (typeof restored?.liquidTotal === 'number' && restored.liquidTotal > 0) {
+      return restored.liquidTotal
+    }
+    if (restored?.phase === 'break') {
+      return Math.max(1, savedBreakMin * 60)
+    }
+    return Math.max(1, restored?.seconds ?? savedWorkMin * 60)
   })
+  const [finishPulse, setFinishPulse] = useState(false)
+  const [running, setRunning] = useState(!!restored?.running)
   const [zenMode, setZenMode] = useState(false)
-  const [draftWork, setDraftWork] = useState(String(DEFAULT_WORK_MIN))
-  const [draftBreak, setDraftBreak] = useState(String(DEFAULT_BREAK_MIN))
-  const [draftFree, setDraftFree] = useState('0')
-  const [sessionActive, setSessionActive] = useState(false)
+  const [draftWork, setDraftWork] = useState(String(savedWorkMin))
+  const [draftBreak, setDraftBreak] = useState(String(savedBreakMin))
+  const [draftFree, setDraftFree] = useState(String(settings.freeMin ?? 0))
+  const [sessionActive, setSessionActive] = useState(!!restored?.sessionActive)
 
   const intervalRef = useRef(null)
   const phaseRef = useRef(phase)
@@ -863,15 +973,21 @@ export function Pomodoro({
   const modeRef = useRef(mode)
   const focusIdRef = useRef(focusTask?.id)
   const trackRef = useRef(onTrackFocusTime)
+  const secondsRef = useRef(seconds)
+  const runningRef = useRef(running)
+  const endsAtRef = useRef(restored?.endsAt || null)
+  const startedAtRef = useRef(restored?.startedAt || null)
+  const stopwatchOffsetRef = useRef(restored?.stopwatchOffset || 0)
 
   phaseRef.current = phase
   settingsRef.current = settings
-  modeRef.current = mode
+  modeRef.current = sessionMode
   focusIdRef.current = focusTask?.id
   trackRef.current = onTrackFocusTime
+  secondsRef.current = seconds
+  runningRef.current = running
 
-  const freeCountdown = Math.max(0, settings.freeMin) * 60
-  const isFreeStopwatch = mode === 'free' && freeCountdown === 0
+  const isFreeStopwatch = sessionMode === 'free'
 
   const rebaseLiquid = useCallback((nextSeconds) => {
     setLiquidTotal(Math.max(1, Math.floor(Number(nextSeconds)) || 1))
@@ -882,80 +998,313 @@ export function Pomodoro({
     window.setTimeout(() => setFinishPulse(false), 800)
   }, [])
 
-  const applySettings = () => {
+  const applyClockState = useCallback(
+    (next, { pulse = false } = {}) => {
+      if (next.elapsedWork > 0) {
+        const focusId = focusIdRef.current
+        const track = trackRef.current
+        const nextMode = modeRef.current
+        const nextPhase = next.phase
+        if (
+          track &&
+          focusId &&
+          (nextMode === 'free' || nextPhase === 'work' || phaseRef.current === 'work')
+        ) {
+          track(focusId, next.elapsedWork)
+        }
+      }
+
+      const phaseChanged = next.phase !== phaseRef.current
+      setSeconds(next.seconds)
+      setPhase(next.phase)
+      setRunning(next.running)
+      setSessionActive(next.sessionActive)
+      endsAtRef.current = next.endsAt
+      startedAtRef.current = next.startedAt
+      stopwatchOffsetRef.current = next.stopwatchOffset
+      secondsRef.current = next.seconds
+      runningRef.current = next.running
+      phaseRef.current = next.phase
+
+      if (phaseChanged && next.seconds > 0) rebaseLiquid(next.seconds)
+      if (pulse && next.finished) triggerFinishPulse()
+    },
+    [rebaseLiquid, triggerFinishPulse],
+  )
+
+  const lastSyncAtRef = useRef(0)
+  const syncClock = useCallback(
+    (options) => {
+      const now = Date.now()
+      if (now - lastSyncAtRef.current < 250 && !options?.force) {
+        return {
+          seconds: secondsRef.current,
+          phase: phaseRef.current,
+          running: runningRef.current,
+          sessionActive: runningRef.current,
+          endsAt: endsAtRef.current,
+          startedAt: startedAtRef.current,
+          stopwatchOffset: stopwatchOffsetRef.current,
+          elapsedWork: 0,
+          finished: false,
+        }
+      }
+      lastSyncAtRef.current = now
+      const next = catchUpTimer({
+        now,
+        running: runningRef.current,
+        mode: modeRef.current,
+        phase: phaseRef.current,
+        seconds: secondsRef.current,
+        endsAt: endsAtRef.current,
+        startedAt: startedAtRef.current,
+        stopwatchOffset: stopwatchOffsetRef.current,
+        settings: {
+          ...settingsRef.current,
+          freeMin: modeRef.current === 'free' ? 0 : settingsRef.current.freeMin,
+        },
+      })
+      applyClockState(next, options)
+      return next
+    },
+    [applyClockState],
+  )
+
+  const notificationTitles = useCallback(
+    () => ({
+      app: t('pomodoro.appTitle'),
+      focusDone: t('pomodoro.notify.focusDone'),
+      breakDone: t('pomodoro.notify.breakDone'),
+      timerDone: t('pomodoro.notify.timerDone'),
+    }),
+    [t],
+  )
+
+  const armNotifications = useCallback(
+    (snapshot) => {
+      const isStopwatch = snapshot.mode === 'free'
+      if (!snapshot.running || isStopwatch || !snapshot.endsAt) {
+        cancelTimerNotifications()
+        return
+      }
+      scheduleTimerNotifications({
+        endsAt: snapshot.endsAt,
+        mode: snapshot.mode,
+        phase: snapshot.phase,
+        breakMin: settingsRef.current.breakMin,
+        titles: notificationTitles(),
+      })
+    },
+    [notificationTitles],
+  )
+
+  const commitDraftSettings = () => {
     const nextWork = Math.max(1, clampMinutes(draftWork, settings.workMin))
     const nextBreak = clampMinutes(draftBreak, settings.breakMin)
     const nextFree = clampMinutes(draftFree, settings.freeMin)
-
     const next = { workMin: nextWork, breakMin: nextBreak, freeMin: nextFree }
     setSettings(next)
-    setRunning(false)
-    setSessionActive(false)
+    settingsRef.current = next
+    setDraftWork(String(nextWork))
+    setDraftBreak(String(nextBreak))
+    setDraftFree(String(nextFree))
+    return next
+  }
+
+  const applySettings = () => {
+    const next = commitDraftSettings()
+
+    if (running || sessionActive) {
+      return next
+    }
+
+    endsAtRef.current = null
+    startedAtRef.current = null
+    cancelTimerNotifications()
+    clearPomodoroRuntime()
 
     if (mode === 'pomodoro') {
       setPhase('work')
-      const sec = nextWork * 60
+      const sec = next.workMin * 60
       setSeconds(sec)
       rebaseLiquid(sec)
     } else {
-      const sec = nextFree * 60
-      setSeconds(sec)
-      if (sec > 0) rebaseLiquid(sec)
+      setSeconds(0)
+      stopwatchOffsetRef.current = 0
     }
+    return next
   }
 
   const reset = () => {
     setRunning(false)
+    runningRef.current = false
     setSessionActive(false)
+    setSessionMode(mode)
+    modeRef.current = mode
+    endsAtRef.current = null
+    startedAtRef.current = null
+    stopwatchOffsetRef.current = 0
+    cancelTimerNotifications()
+    clearPomodoroRuntime()
     if (mode === 'pomodoro') {
       setPhase('work')
       const sec = Math.max(1, settings.workMin) * 60
       setSeconds(sec)
       rebaseLiquid(sec)
     } else {
-      const sec = Math.max(0, settings.freeMin) * 60
-      setSeconds(sec)
-      if (sec > 0) rebaseLiquid(sec)
+      setPhase('work')
+      setSeconds(0)
+      stopwatchOffsetRef.current = 0
     }
   }
 
-  const toggleRunning = () => {
+  const startSession = (nextMode) => {
+    commitDraftSettings()
+    const now = Date.now()
+    setSessionMode(nextMode)
+    modeRef.current = nextMode
+    setPhase('work')
+    phaseRef.current = 'work'
     setSessionActive(true)
-    setRunning((v) => !v)
+
+    if (nextMode === 'free') {
+      setSettings((prev) => ({ ...prev, freeMin: 0 }))
+      setSeconds(0)
+      secondsRef.current = 0
+      stopwatchOffsetRef.current = 0
+      startedAtRef.current = now
+      endsAtRef.current = null
+    } else {
+      const sec = Math.max(1, settingsRef.current.workMin) * 60
+      setSeconds(sec)
+      secondsRef.current = sec
+      rebaseLiquid(sec)
+      stopwatchOffsetRef.current = 0
+      startedAtRef.current = null
+      endsAtRef.current = now + sec * 1000
+    }
+
+    setRunning(true)
+    runningRef.current = true
+    armNotifications({
+      running: true,
+      mode: nextMode,
+      phase: 'work',
+      endsAt: endsAtRef.current,
+    })
+  }
+
+  const toggleRunning = () => {
+    if (mode !== sessionMode) {
+      startSession(mode)
+      return
+    }
+
+    if (running) {
+      const snapshot = syncClock()
+      setRunning(false)
+      runningRef.current = false
+      endsAtRef.current = null
+      startedAtRef.current = null
+      stopwatchOffsetRef.current = snapshot.seconds
+      cancelTimerNotifications()
+      return
+    }
+
+    const nextSettings = commitDraftSettings()
+    let startSeconds = seconds
+    if (!sessionActive && sessionMode === 'pomodoro' && phase === 'work') {
+      startSeconds = Math.max(1, nextSettings.workMin) * 60
+      setSeconds(startSeconds)
+      secondsRef.current = startSeconds
+      rebaseLiquid(startSeconds)
+    }
+
+    setSessionActive(true)
+    const now = Date.now()
+    if (isFreeStopwatch) {
+      startedAtRef.current = now
+      stopwatchOffsetRef.current = startSeconds
+      endsAtRef.current = null
+    } else {
+      endsAtRef.current = now + Math.max(0, startSeconds) * 1000
+      startedAtRef.current = null
+    }
+    setRunning(true)
+    runningRef.current = true
+    armNotifications({
+      running: true,
+      mode: sessionMode,
+      phase,
+      endsAt: endsAtRef.current,
+    })
   }
 
   const adjustMinutes = (deltaMin) => {
+    if (mode !== sessionMode) return
     const deltaSec = deltaMin * 60
     const maxSec = MAX_MINUTES * 60
     const next = Math.max(0, Math.min(maxSec, seconds + deltaSec))
     setSeconds(next)
-    // Ручная смена = новая база «воды», уровень остаётся полным
-    if (!(mode === 'free' && settings.freeMin === 0) && next > 0) {
+    secondsRef.current = next
+    if (running && !isFreeStopwatch) {
+      endsAtRef.current = Date.now() + next * 1000
+      armNotifications({
+        running: true,
+        mode: sessionMode,
+        phase,
+        endsAt: endsAtRef.current,
+      })
+    }
+    if (running && isFreeStopwatch) {
+      stopwatchOffsetRef.current = next
+      startedAtRef.current = Date.now()
+    }
+    if (!isFreeStopwatch && next > 0) {
       rebaseLiquid(next)
+    }
+    if (!running && !isFreeStopwatch) {
+      const minutes = Math.min(MAX_MINUTES, Math.round(next / 60))
+      if (phase === 'break') {
+        const breakMin = clampMinutes(minutes, settings.breakMin)
+        setSettings((prev) => ({ ...prev, breakMin }))
+        setDraftBreak(String(breakMin))
+      } else {
+        const workMin = Math.max(1, clampMinutes(minutes, settings.workMin) || 1)
+        setSettings((prev) => ({ ...prev, workMin }))
+        setDraftWork(String(workMin))
+      }
     }
   }
 
   const setCustomTime = (totalSeconds) => {
+    if (mode !== sessionMode || running) return
     const maxSec = MAX_MINUTES * 60
     const clamped = Math.max(0, Math.min(maxSec, Math.floor(totalSeconds)))
     const minutes = Math.min(MAX_MINUTES, Math.round(clamped / 60))
 
     setRunning(false)
+    runningRef.current = false
+    endsAtRef.current = null
+    startedAtRef.current = null
+    cancelTimerNotifications()
     setSeconds(clamped)
     if (clamped > 0) rebaseLiquid(clamped)
 
     if (mode === 'free') {
-      setSettings((prev) => ({ ...prev, freeMin: minutes }))
+      stopwatchOffsetRef.current = clamped
       return
     }
 
     if (phase === 'break') {
       setSettings((prev) => ({ ...prev, breakMin: minutes }))
+      setDraftBreak(String(minutes))
       return
     }
 
     const workMin = Math.max(1, minutes || 1)
     setSettings((prev) => ({ ...prev, workMin }))
+    setDraftWork(String(workMin))
     if (clamped < 1) {
       const sec = workMin * 60
       setSeconds(sec)
@@ -964,31 +1313,38 @@ export function Pomodoro({
   }
 
   const enterZen = () => {
-    setCollapsed(false)
-    setDraftWork(String(settings.workMin))
-    setDraftBreak(String(settings.breakMin))
-    setDraftFree(String(settings.freeMin))
+    setDraftWork(String(Math.max(1, clampMinutes(settings.workMin, DEFAULT_WORK_MIN))))
+    setDraftBreak(String(clampMinutes(settings.breakMin, DEFAULT_BREAK_MIN)))
+    setDraftFree(String(clampMinutes(settings.freeMin, 0)))
+    if (!running && !sessionActive && mode === 'pomodoro' && sessionMode === 'pomodoro') {
+      const sec = Math.max(1, clampMinutes(settings.workMin, DEFAULT_WORK_MIN)) * 60
+      setSeconds(sec)
+      rebaseLiquid(sec)
+    }
     setZenMode(true)
   }
 
-  const exitZen = useCallback(() => {
+  const exitZen = () => {
+    applySettings()
     setZenMode(false)
-  }, [])
+  }
 
   const switchMode = (nextMode) => {
     if (nextMode === mode) return
     setMode(nextMode)
-    setRunning(false)
-    setSessionActive(false)
+    if (running || sessionActive) return
+
+    setSessionMode(nextMode)
+    modeRef.current = nextMode
     setPhase('work')
     if (nextMode === 'pomodoro') {
       const sec = Math.max(1, settings.workMin) * 60
       setSeconds(sec)
       rebaseLiquid(sec)
     } else {
-      const sec = Math.max(0, settings.freeMin) * 60
-      setSeconds(sec)
-      if (sec > 0) rebaseLiquid(sec)
+      setSettings((prev) => ({ ...prev, freeMin: 0 }))
+      setSeconds(0)
+      stopwatchOffsetRef.current = 0
     }
   }
 
@@ -1001,83 +1357,111 @@ export function Pomodoro({
       return undefined
     }
 
+    syncClock({ force: true })
     intervalRef.current = setInterval(() => {
-      const currentMode = modeRef.current
-      const currentSettings = settingsRef.current
-      const currentPhase = phaseRef.current
-      const focusId = focusIdRef.current
-      const track = trackRef.current
-
+      const prevEnds = endsAtRef.current
+      const prevPhase = phaseRef.current
+      const next = syncClock({ pulse: true, force: true })
       if (
-        track &&
-        focusId &&
-        (currentMode === 'free' || currentPhase === 'work')
+        next.running &&
+        (next.phase !== prevPhase || next.endsAt !== prevEnds)
       ) {
-        track(focusId, 1)
+        armNotifications({
+          running: true,
+          mode: modeRef.current,
+          phase: next.phase,
+          endsAt: next.endsAt,
+        })
       }
-
-      if (currentMode === 'free' && currentSettings.freeMin === 0) {
-        setSeconds((prev) => prev + 1)
-        return
-      }
-
-      setSeconds((prev) => {
-        if (prev <= 1) {
-          triggerFinishPulse()
-
-          if (currentMode === 'pomodoro') {
-            const nextPhase = phaseRef.current === 'work' ? 'break' : 'work'
-            const nextSeconds =
-              nextPhase === 'work'
-                ? Math.max(1, currentSettings.workMin) * 60
-                : Math.max(0, currentSettings.breakMin) * 60
-
-            if (nextPhase === 'break' && currentSettings.breakMin === 0) {
-              setPhase('work')
-              setRunning(false)
-              setSessionActive(false)
-              const sec = Math.max(1, currentSettings.workMin) * 60
-              rebaseLiquid(sec)
-              return sec
-            }
-
-            setPhase(nextPhase)
-            if (nextPhase === 'work') {
-              setRunning(false)
-              setSessionActive(false)
-            }
-            const sec =
-              nextSeconds || Math.max(1, currentSettings.workMin) * 60
-            if (sec > 0) rebaseLiquid(sec)
-            return sec
-          }
-
-          setRunning(false)
-          setSessionActive(false)
-          return 0
-        }
-        return prev - 1
-      })
     }, 1000)
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [running, rebaseLiquid, triggerFinishPulse])
+  }, [running, syncClock, armNotifications])
+
+  useEffect(() => {
+    return onAppForeground(() => {
+      if (!runningRef.current) return
+      const next = syncClock({ pulse: true, force: true })
+      armNotifications({
+        running: next.running,
+        mode: modeRef.current,
+        phase: next.phase,
+        endsAt: next.endsAt,
+      })
+    })
+  }, [syncClock, armNotifications])
+
+  useEffect(() => {
+    if (!running && !sessionActive) {
+      clearPomodoroRuntime()
+      return
+    }
+    savePomodoroRuntime({
+      running,
+      sessionActive,
+      mode: sessionMode,
+      phase,
+      seconds,
+      liquidTotal,
+      endsAt: endsAtRef.current,
+      startedAt: startedAtRef.current,
+      stopwatchOffset: stopwatchOffsetRef.current,
+      settings,
+    })
+  }, [running, sessionActive, sessionMode, phase, seconds, liquidTotal, settings])
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const nextWork = Math.max(1, clampMinutes(draftWork, DEFAULT_WORK_MIN))
+      const nextBreak = clampMinutes(draftBreak, DEFAULT_BREAK_MIN)
+      const nextFree = clampMinutes(draftFree, 0)
+      setSettings((prev) => {
+        if (
+          prev.workMin === nextWork &&
+          prev.breakMin === nextBreak &&
+          prev.freeMin === nextFree
+        ) {
+          return prev
+        }
+        return { workMin: nextWork, breakMin: nextBreak, freeMin: nextFree }
+      })
+    }, 350)
+    return () => window.clearTimeout(id)
+  }, [draftWork, draftBreak, draftFree, setSettings])
+
+  useEffect(() => {
+    if (running || sessionActive) return
+    if (mode !== 'pomodoro' || sessionMode !== 'pomodoro') return
+    const sec = Math.max(1, clampMinutes(settings.workMin, DEFAULT_WORK_MIN)) * 60
+    setSeconds(sec)
+    rebaseLiquid(sec)
+  }, [
+    settings.workMin,
+    running,
+    sessionActive,
+    mode,
+    sessionMode,
+    rebaseLiquid,
+  ])
 
   useEffect(() => {
     if (!focusTask) return
-    setCollapsed(false)
+    setDraftWork(String(settings.workMin))
+    setDraftBreak(String(settings.breakMin))
+    setDraftFree(String(settings.freeMin))
+    setZenMode(true)
   }, [focusTask?.id])
 
   useEffect(() => {
     if (running || sessionActive) {
       const label =
-        mode === 'pomodoro'
+        sessionMode === 'pomodoro'
           ? phase === 'break'
             ? t('pomodoro.status.break')
             : t('pomodoro.status.focus')
-          : t('pomodoro.status.focus')
+          : t('pomodoro.status.free')
       document.title = `${formatTime(seconds)} · ${label}`
     } else {
       document.title = t('pomodoro.appTitle')
@@ -1088,22 +1472,18 @@ export function Pomodoro({
     }
   }, [seconds, running, sessionActive, mode, phase, t])
 
-  // Уровень воды = остаток / текущая база (после ручной правки база = новое значение)
-  const liquidLevel = isFreeStopwatch
-    ? 0
-    : Math.min(100, Math.max(0, (seconds / Math.max(1, liquidTotal)) * 100))
-
-  const subtitle = focusTask
-    ? displayTodoText(focusTask.text)
-    : mode === 'pomodoro'
-      ? phase === 'break'
-        ? t('pomodoro.subtitle.break', { n: settings.breakMin })
-        : t('pomodoro.subtitle.work', { n: settings.workMin })
-      : settings.freeMin > 0
-        ? t('pomodoro.subtitle.free', { n: settings.freeMin })
-        : t('pomodoro.subtitle.stopwatch')
-
   const showLive = running || sessionActive
+  const liquidLevel =
+    sessionMode !== 'pomodoro'
+      ? 0
+      : (() => {
+          const total = Math.max(1, liquidTotal)
+          const remaining = Math.min(total, Math.max(0, seconds))
+          if (phase === 'break') {
+            return Math.min(100, Math.max(0, (remaining / total) * 100))
+          }
+          return Math.min(100, Math.max(0, (1 - remaining / total) * 100))
+        })()
 
   const optionsWithCurrent = focusTask
     ? focusOptions.some((t) => t.id === focusTask.id)
@@ -1116,9 +1496,12 @@ export function Pomodoro({
       <ZenMode
         seconds={seconds}
         mode={mode}
+        sessionMode={sessionMode}
         phase={phase}
         running={running}
         showLive={showLive}
+        liquidLevel={liquidLevel}
+        finishPulse={finishPulse}
         focusTask={focusTask}
         focusOptions={optionsWithCurrent}
         onSelectFocus={onSelectFocus}
@@ -1140,113 +1523,19 @@ export function Pomodoro({
     )
   }
 
-  if (collapsed) {
-    return (
-      <button
-        type="button"
-        onClick={() => setCollapsed(false)}
-        className="pomodoro-fab fixed z-50 flex h-[3.675rem] w-[3.675rem] items-center justify-center rounded-xl border border-black/[0.06] dark:border-zinc-700 bg-surface dark:bg-zinc-900/95 text-ink-soft dark:text-zinc-100 shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_40px_-16px_rgba(24,24,27,0.55)] backdrop-blur-md transition-transform hover:scale-105 active:scale-95"
-        aria-label={t('pomodoro.open')}
-      >
-        <Timer size={21} strokeWidth={1.75} />
-        {showLive && (
-          <span className="absolute -top-0.5 -right-0.5">
-            <LiveIndicator running={running} />
-          </span>
-        )}
-      </button>
-    )
-  }
-
   return (
-    <div className="pomodoro-panel fixed z-50 w-full overflow-hidden border border-black/[0.06] dark:border-zinc-700/90 bg-surface dark:bg-zinc-900/95 backdrop-blur-md shadow-[0_-8px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_-20px_50px_-20px_rgba(0,0,0,0.65)] animate-slide-up">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b to-transparent"
-        style={{
-          backgroundImage:
-            'linear-gradient(to bottom, color-mix(in srgb, var(--accent-soft) 85%, transparent), transparent)',
-        }}
-      />
-
-      <div className="relative p-4">
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-400">
-                {t('pomodoro.focusMode')}
-              </p>
-              {showLive && <LiveIndicator running={running} />}
-            </div>
-            <p className="font-display text-sm font-semibold truncate mt-0.5 text-zinc-900 dark:text-zinc-100">
-              {subtitle}
-            </p>
-          </div>
-          <div className="flex items-center gap-0.5 shrink-0">
-            <button
-              type="button"
-              onClick={enterZen}
-              aria-label={t('pomodoro.zenFull')}
-              title={t('pomodoro.zen')}
-              className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
-            >
-              <Maximize2 size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setCollapsed(true)}
-              aria-label={t('pomodoro.collapse')}
-              className="btn-danger-hover p-1.5 rounded-md text-zinc-500"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-
-        <ModeToggle mode={mode} onChange={switchMode} />
-
-        <div className="mt-3 hidden sm:block rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/50 px-2.5 py-2">
-          <FocusGoalPicker
-            focusTask={focusTask}
-            focusOptions={optionsWithCurrent}
-            onSelectFocus={onSelectFocus}
-            onClearFocus={onClearFocus}
-            compact
-          />
-        </div>
-
-        <div className="relative mt-3 mb-1 overflow-hidden rounded-xl border border-black/[0.05] dark:border-zinc-800 bg-gradient-to-b from-canvas-warm to-surface dark:from-zinc-950/80 dark:to-zinc-900/40 px-3 pt-3 pb-3.5">
-          {!isFreeStopwatch && (
-            <LiquidFill level={liquidLevel} finishing={finishPulse} />
-          )}
-
-          <div className="relative z-[1]">
-            <EditableTimeDisplay
-              seconds={seconds}
-              running={running}
-              onCommit={setCustomTime}
-              className={[
-                'w-full text-center font-customMono text-[2.65rem] leading-none font-bold tabular-nums tracking-tight transition-colors',
-                running
-                  ? 'text-zinc-900 dark:text-zinc-50 cursor-default'
-                  : 'text-zinc-800 dark:text-zinc-100 hover:text-zinc-950 dark:hover:text-white cursor-text',
-              ].join(' ')}
-              inputClassName="w-full text-center font-customMono text-[2.65rem] leading-none font-bold tabular-nums tracking-tight bg-transparent border-b border-zinc-300 dark:border-zinc-600 outline-none text-zinc-900 dark:text-zinc-100 py-0.5"
-            />
-
-            <div className="mt-3.5 flex justify-center">
-              <AdjustButtons onAdjust={adjustMinutes} />
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3.5">
-          <TimerControls
-            running={running}
-            onToggle={toggleRunning}
-            onReset={reset}
-          />
-        </div>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={enterZen}
+      className="pomodoro-fab fixed z-50 flex h-[3.675rem] w-[3.675rem] items-center justify-center rounded-xl border border-black/[0.06] dark:border-zinc-700 bg-surface dark:bg-zinc-900/95 text-ink-soft dark:text-zinc-100 shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:shadow-[0_12px_40px_-16px_rgba(24,24,27,0.55)] backdrop-blur-md transition-transform hover:scale-105 active:scale-95"
+      aria-label={t('pomodoro.open')}
+    >
+      <Timer size={21} strokeWidth={1.75} />
+      {showLive && (
+        <span className="absolute -top-0.5 -right-0.5">
+          <LiveIndicator running={running} />
+        </span>
+      )}
+    </button>
   )
 }

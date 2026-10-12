@@ -1,0 +1,19 @@
+{
+  "name": "widget-bridge",
+  "version": "0.0.1",
+  "private": true,
+  "main": "src/index.js",
+  "files": [
+    "ios",
+    "src",
+    "Package.swift"
+  ],
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  }
+}
